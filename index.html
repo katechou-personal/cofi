@@ -1,0 +1,1591 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>CoFi — Bu 🐟 ✕ Chu 🦦 家庭聯名帳本</title>
+  
+  <!-- iOS PWA Specific Meta Tags -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="CoFi" />
+  <link rel="apple-touch-icon" href="https://api.iconify.design/twemoji:money-bag.svg" />
+
+  <!-- Google Fonts for Outfit and Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- OFFICIAL Tailwind CSS v3 Browser CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            bu: {
+              pink: '#EC4899',
+              purple: '#A855F7',
+            },
+            chu: {
+              blue: '#3B82F6',
+              navy: '#1D4ED8',
+            },
+            shared: {
+              emerald: '#10B981',
+              teal: '#14B8A6',
+            }
+          },
+          fontFamily: {
+            sans: ['Outfit', 'Inter', 'system-ui', '-apple-system', 'sans-serif'],
+          },
+          boxShadow: {
+            'premium-glow': '0 0 20px rgba(168, 85, 247, 0.15)',
+            'bu-glow': '0 0 20px rgba(236, 72, 153, 0.3)',
+            'chu-glow': '0 0 20px rgba(59, 130, 246, 0.3)',
+            'shared-glow': '0 0 20px rgba(16, 185, 129, 0.3)',
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Lucide Icons CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.300.0/dist/umd/lucide.min.js"></script>
+
+  <!-- React & ReactDOM Production CDNs -->
+  <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+
+  <!-- Babel Standalone CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.23.5/babel.min.js"></script>
+
+  <style>
+    body {
+      margin: 0;
+      background-color: #0b0b0e;
+      color: #f4f4f5;
+      font-family: 'Outfit', 'Inter', -apple-system, sans-serif;
+      overflow: hidden;
+      -webkit-tap-highlight-color: transparent;
+    }
+    
+    ::-webkit-scrollbar {
+      display: none;
+    }
+    
+    body {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+
+    .pt-safe {
+      padding-top: env(safe-area-inset-top, 0px);
+    }
+    .pb-safe {
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    .mb-safe {
+      margin-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    .bottom-safe {
+      bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    .premium-card {
+      background: rgba(18, 18, 22, 0.7);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(39, 39, 42, 0.8);
+      box-shadow: 0 10px 40px -15px rgba(0, 0, 0, 0.8);
+    }
+
+    .premium-card-pink {
+      border-color: rgba(236, 72, 153, 0.25);
+      background: linear-gradient(135deg, rgba(20, 20, 25, 0.85) 0%, rgba(236, 72, 153, 0.04) 100%);
+    }
+
+    .premium-card-blue {
+      border-color: rgba(59, 130, 246, 0.25);
+      background: linear-gradient(135deg, rgba(20, 20, 25, 0.85) 0%, rgba(59, 130, 246, 0.04) 100%);
+    }
+
+    .premium-card-shared {
+      border-color: rgba(16, 185, 129, 0.25);
+      background: linear-gradient(135deg, rgba(20, 20, 25, 0.85) 0%, rgba(16, 185, 129, 0.04) 100%);
+    }
+
+    .premium-glass-input {
+      background: rgba(9, 9, 11, 0.6);
+      border: 1px solid rgba(63, 63, 70, 0.5);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+
+    .premium-glass-input:focus {
+      border-color: rgba(168, 85, 247, 0.5);
+      box-shadow: 0 0 12px rgba(168, 85, 247, 0.15);
+      outline: none;
+    }
+
+    .bg-glow-pink {
+      background: radial-gradient(circle at 10% 20%, rgba(236, 72, 153, 0.12) 0%, transparent 60%);
+    }
+
+    .bg-glow-blue {
+      background: radial-gradient(circle at 90% 80%, rgba(59, 130, 246, 0.12) 0%, transparent 60%);
+    }
+
+    .bg-grid-overlay {
+      background-size: 40px 40px;
+      background-image: 
+        linear-gradient(to right, rgba(255, 255, 255, 0.01) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.01) 1px, transparent 1px);
+    }
+
+    .active-press {
+      transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.15s;
+    }
+
+    .active-press:active {
+      transform: scale(0.96);
+    }
+
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
+
+    @keyframes slideIn {
+      from { transform: translateY(-20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    .animate-fadeIn {
+      animation: fadeIn 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    }
+
+    .animate-slideUp {
+      animation: slideUp 0.35s cubic-bezier(0.1, 0.76, 0.55, 0.94) forwards;
+    }
+
+    .animate-slideIn {
+      animation: slideIn 0.25s cubic-bezier(0.1, 0.76, 0.55, 0.94) forwards;
+    }
+  </style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen select-none bg-grid-overlay flex items-center justify-center">
+  <div id="root" class="w-full"></div>
+
+  <!-- React Code with Babel -->
+  <script type="text/babel">
+    const { useState, useEffect, useMemo } = React;
+
+    // ==========================================
+    // 自製 Lucide Icon 渲染器 (配合穩定 CDN)
+    // ==========================================
+    function Icon({ name, size = 16, className = "" }) {
+      const [svgContent, setSvgContent] = useState("");
+      
+      useEffect(() => {
+        if (!name) return;
+        if (window.lucide && window.lucide.icons) {
+          const camelName = name.charAt(0).toLowerCase() + name.slice(1);
+          const icon = window.lucide.icons[camelName] || window.lucide.icons[name];
+          
+          if (icon) {
+            const children = icon[2] || [];
+            let childrenHtml = "";
+            children.forEach(child => {
+              const childName = child[0];
+              const childAttrs = child[1];
+              const attrsStr = Object.entries(childAttrs)
+                .map(([k, v]) => `${k}="${v}"`)
+                .join(" ");
+              childrenHtml += `<${childName} ${attrsStr}></${childName}>`;
+            });
+            setSvgContent(childrenHtml);
+          }
+        }
+      }, [name]);
+
+      if (!name) return null;
+
+      if (!svgContent) {
+        return <span style={{ width: size, height: size }} className={"inline-block " + className}></span>;
+      }
+
+      return (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width={size}
+          height={size}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={"lucide inline-block " + className}
+          dangerouslySetInnerHTML={{ __html: svgContent }}
+        />
+      );
+    }
+
+    // ==========================================
+    // 預設精緻模擬資料
+    // ==========================================
+    const INITIAL_ACCOUNTS = [
+      { id: 'a1', name: '台新 Richart', balance: 128500, owner: 'Bu' },
+      { id: 'a2', name: '富邦銀行', balance: 254000, owner: 'Bu' },
+      { id: 'a3', name: '中國信託', balance: 342000, owner: 'Chu' },
+      { id: 'a4', name: '國泰世華', balance: 512000, owner: 'Chu' }
+    ];
+
+    const INITIAL_STOCKS = [
+      { id: 's1', symbol: '2330', name: '台積電', shares: 800, avgCost: 720.0, currentPrice: 845.0, owner: 'Chu' },
+      { id: 's2', symbol: '0050', name: '元大台灣50', shares: 2500, avgCost: 135.0, currentPrice: 156.5, owner: 'Bu' },
+      { id: 's3', symbol: 'AAPL', name: 'Apple Inc.', shares: 45, avgCost: 168.0, currentPrice: 189.84, owner: 'Chu' },
+      { id: 's4', symbol: 'TSLA', name: 'Tesla Inc.', shares: 25, avgCost: 195.0, currentPrice: 178.6, owner: 'Bu' }
+    ];
+
+    const INITIAL_BATCHES = [
+      { id: 'b1', name: '2026/05 堅果果乾團購檔期', active: true },
+      { id: 'b2', name: '2026/04 日韓春季服飾代購', active: false }
+    ];
+
+    const INITIAL_ORDERS = [
+      { id: 'o1', date: '2026-05-20', client: '陳美玲', channel: 'Google表單', item: '綜合堅果特大包', cost: 300, price: 490, profit: 190, status: '已出貨', batchId: 'b1' },
+      { id: 'o2', date: '2026-05-22', client: '林志豪', channel: 'IG手動', item: '頂級野生開心果', cost: 220, price: 390, profit: 170, status: '已買項目', batchId: 'b1' },
+      { id: 'o3', date: '2026-05-23', client: '張雅婷', channel: 'Google表單', item: '無鹽烘焙腰果', cost: 200, price: 350, profit: 150, status: '待買項目', batchId: 'b1' },
+      { id: 'o4', date: '2026-04-12', client: '王思涵', channel: 'IG手動', item: '法式風衣外套 - 桃粉', cost: 1200, price: 2180, profit: 980, status: '已出貨', batchId: 'b2' },
+      { id: 'o5', date: '2026-04-15', client: '李佳蓉', channel: 'IG手動', item: '日系針織罩衫 - 米白', cost: 850, price: 1480, profit: 630, status: '已出貨', batchId: 'b2' },
+      { id: 'o6', date: '2026-05-24', client: '謝宇軒', channel: 'Google表單', item: '綜合堅果特大包', cost: 300, price: 490, profit: 190, status: '待買項目', batchId: 'b1' }
+    ];
+
+    // 2026年 01月-03月 您的真實花費預載入
+    const INITIAL_TRANSACTIONS = [
+      { id: 'real_2026_03_01', date: '2026-03-31', type: 'expense', amount: 42703, category: '住宅房租', owner: '共同', desc: '逸境房貸/年' },
+      { id: 'real_2026_03_02', date: '2026-03-31', type: 'expense', amount: 9000, category: '住宅房租', owner: '共同', desc: '芬園裝潢貸款/年' },
+      { id: 'real_2026_03_03', date: '2026-03-31', type: 'expense', amount: 2653, category: '其他', owner: '共同', desc: '電信費' },
+      { id: 'real_2026_03_04', date: '2026-03-31', type: 'expense', amount: 10703, category: '餐飲伙食', owner: '共同', desc: '日常生活開銷' },
+      { id: 'real_2026_03_05', date: '2026-03-31', type: 'expense', amount: 17887, category: '其他', owner: '共同', desc: '🐈 貓咪專案開支' },
+      { id: 'real_2026_03_06', date: '2026-03-31', type: 'expense', amount: 121078, category: '娛樂生活', owner: '共同', desc: '國外旅遊度假' },
+      { id: 'real_2026_03_07', date: '2026-03-31', type: 'expense', amount: 2021, category: '娛樂生活', owner: '共同', desc: '休閒娛樂/年' },
+      { id: 'real_2026_03_08', date: '2026-03-31', type: 'expense', amount: 1008, category: '其他', owner: '共同', desc: '轉帳與手續費' },
+      { id: 'real_2026_03_09', date: '2026-03-31', type: 'expense', amount: 5823, category: '娛樂生活', owner: '共同', desc: '精選禮品送禮' },
+      { id: 'real_2026_03_10', date: '2026-03-31', type: 'income', amount: 222914, category: '主業薪資', owner: '共同', desc: '雙人薪水總額' },
+      { id: 'real_2026_03_11', date: '2026-03-31', type: 'income', amount: 6035, category: '其他', owner: '共同', desc: '證券投資配息' },
+
+      { id: 'real_2026_02_01', date: '2026-02-28', type: 'expense', amount: 42500, category: '住宅房租', owner: '共同', desc: '逸境房貸/年' },
+      { id: 'real_2026_02_02', date: '2026-02-28', type: 'expense', amount: 9000, category: '住宅房租', owner: '共同', desc: '芬園裝潢貸款/年' },
+      { id: 'real_2026_02_03', date: '2026-02-28', type: 'expense', amount: 32145, category: '其他', owner: '共同', desc: '南山保險費' },
+      { id: 'real_2026_02_04', date: '2026-02-28', type: 'expense', amount: 39600, category: '娛樂生活', owner: '共同', desc: '節日大紅包' },
+      { id: 'real_2026_02_05', date: '2026-02-28', type: 'expense', amount: 18577, category: '餐飲伙食', owner: '共同', desc: '日常生活開銷' },
+      { id: 'real_2026_02_06', date: '2026-02-28', type: 'expense', amount: 2864, category: '其他', owner: '共同', desc: '🐈 貓咪專案開支' },
+      { id: 'real_2026_02_07', date: '2026-02-28', type: 'expense', amount: 2665, category: '娛樂生活', owner: '共同', desc: '保養治裝/年' },
+      { id: 'real_2026_02_08', date: '2026-02-28', type: 'expense', amount: 4080, category: '娛樂生活', owner: '共同', desc: '溫馨旅遊度假' },
+      { id: 'real_2026_02_09', date: '2026-02-28', type: 'expense', amount: 2320, category: '娛樂生活', owner: '共同', desc: '休閒娛樂/年' },
+      { id: 'real_2026_02_10', date: '2026-02-28', type: 'expense', amount: 232, category: '其他', owner: '共同', desc: '轉帳手續費' },
+      { id: 'real_2026_02_11', date: '2026-02-28', type: 'expense', amount: 350, category: '娛樂生活', owner: '共同', desc: '節日禮品' },
+      { id: 'real_2026_02_12', date: '2026-02-28', type: 'income', amount: 618303, category: '主業薪資', owner: '共同', desc: '雙人薪水總額 (含年終)' },
+      { id: 'real_2026_02_13', date: '2026-02-28', type: 'income', amount: 11994, category: '其他', owner: '共同', desc: '證券投資配息' },
+
+      { id: 'real_2026_01_01', date: '2026-01-31', type: 'expense', amount: 250680, category: '住宅房租', owner: '共同', desc: '逸境房貸/年' },
+      { id: 'real_2026_01_02', date: '2026-01-31', type: 'expense', amount: 9000, category: '住宅房租', owner: '共同', desc: '芬園裝潢貸款/年' },
+      { id: 'real_2026_01_03', date: '2026-01-31', type: 'expense', amount: 17015, category: '交通移動', owner: '共同', desc: '車子(貸款&保險&保養)/年' },
+      { id: 'real_2026_01_04', date: '2026-01-31', type: 'expense', amount: 37601, category: '其他', owner: '共同', desc: '家人保險費 (阿生+享+淳)' },
+      { id: 'real_2026_01_05', date: '2026-01-31', type: 'expense', amount: 4374, category: '住宅房租', owner: '共同', desc: '家庭電費/年' },
+      { id: 'real_2026_01_06', date: '2026-01-31', type: 'expense', amount: 2525, category: '其他', owner: '共同', desc: '電信費' },
+      { id: 'real_2026_01_07', date: '2026-01-31', type: 'expense', amount: 6776, category: '餐飲伙食', owner: '共同', desc: '日常生活開銷' },
+      { id: 'real_2026_01_08', date: '2026-01-31', type: 'expense', amount: 728, category: '其他', owner: '共同', desc: '🐈 貓咪專案開支' },
+      { id: 'real_2026_01_09', date: '2026-01-31', type: 'expense', amount: 4905, category: '娛樂生活', owner: '共同', desc: '保養治裝/年' },
+      { id: 'real_2026_01_10', date: '2026-01-31', type: 'expense', amount: 3146, category: '娛樂生活', owner: '共同', desc: '休閒娛樂/年' },
+      { id: 'real_2026_01_11', date: '2026-01-31', type: 'expense', amount: 179, category: '其他', owner: '共同', desc: '轉帳與手續費' },
+      { id: 'real_2026_01_12', date: '2026-01-31', type: 'expense', amount: 1690, category: '娛樂生活', owner: '共同', desc: '新年禮品' },
+      { id: 'real_2026_01_13', date: '2026-01-31', type: 'income', amount: 157847, category: '主業薪資', owner: '共同', desc: '雙人薪水總額' },
+      { id: 'real_2026_01_14', date: '2026-01-31', type: 'income', amount: 12090, category: '其他', owner: '共同', desc: '證券投資配息' },
+      { id: 'real_2026_01_15', date: '2026-01-31', type: 'income', amount: 560, category: '副業滾存', owner: 'Bu', desc: '副業代購賺取金額' }
+    ];
+
+    const SIMULATED_GOODS = [
+      { item: '綜合堅果特大包', cost: 300, price: 490 },
+      { item: '頂級野生開心果', cost: 220, price: 390 },
+      { item: '無鹽烘焙腰果', cost: 200, price: 350 },
+      { item: '養生去籽黑棗', cost: 180, price: 290 },
+      { item: '加拿大蔓越莓乾', cost: 150, price: 250 }
+    ];
+
+    const SIMULATED_CLIENTS = ['黃小愛', '蔡依林', '徐若瑄', '周杰倫', '五月天阿信', '張惠妹', '蕭敬騰'];
+
+    function App() {
+      // 核心狀態 (try-catch)
+      const [activeTab, setActiveTab] = useState('dashboard');
+      
+      const [accounts, setAccounts] = useState(() => {
+        try {
+          const local = localStorage.getItem('cofi_accounts');
+          return local ? JSON.parse(local) : INITIAL_ACCOUNTS;
+        } catch(e) {
+          return INITIAL_ACCOUNTS;
+        }
+      });
+
+      const [stocks, setStocks] = useState(() => {
+        try {
+          const local = localStorage.getItem('cofi_stocks');
+          return local ? JSON.parse(local) : INITIAL_STOCKS;
+        } catch(e) {
+          return INITIAL_STOCKS;
+        }
+      });
+
+      const [batches, setBatches] = useState(() => {
+        try {
+          const local = localStorage.getItem('cofi_batches');
+          return local ? JSON.parse(local) : INITIAL_BATCHES;
+        } catch(e) {
+          return INITIAL_BATCHES;
+        }
+      });
+
+      const [orders, setOrders] = useState(() => {
+        try {
+          const local = localStorage.getItem('cofi_orders');
+          return local ? JSON.parse(local) : INITIAL_ORDERS;
+        } catch(e) {
+          return INITIAL_ORDERS;
+        }
+      });
+
+      const [transactions, setTransactions] = useState(() => {
+        try {
+          const local = localStorage.getItem('cofi_transactions');
+          if (!local) {
+            localStorage.setItem('cofi_transactions', JSON.stringify(INITIAL_TRANSACTIONS));
+            return INITIAL_TRANSACTIONS;
+          }
+          return JSON.parse(local);
+        } catch(e) {
+          return INITIAL_TRANSACTIONS;
+        }
+      });
+
+      // UI 狀態
+      const [toasts, setToasts] = useState([]);
+      const [selectedBatchId, setSelectedBatchId] = useState(() => {
+        const active = INITIAL_BATCHES.find(b => b.active);
+        return active ? active.id : INITIAL_BATCHES[0].id;
+      });
+      const [orderFilter, setOrderFilter] = useState('全部');
+      const [cashflowFilter, setCashflowFilter] = useState('全部');
+
+      // 彈窗
+      const [sheet, setSheet] = useState({ isOpen: false, type: '', data: null });
+      const [modal, setModal] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
+
+      // 持久化
+      useEffect(() => { localStorage.setItem('cofi_accounts', JSON.stringify(accounts)); }, [accounts]);
+      useEffect(() => { localStorage.setItem('cofi_stocks', JSON.stringify(stocks)); }, [stocks]);
+      useEffect(() => { localStorage.setItem('cofi_batches', JSON.stringify(batches)); }, [batches]);
+      useEffect(() => { localStorage.setItem('cofi_orders', JSON.stringify(orders)); }, [orders]);
+      useEffect(() => { localStorage.setItem('cofi_transactions', JSON.stringify(transactions)); }, [transactions]);
+
+      const showToast = (message, type = 'success') => {
+        const id = Date.now() + Math.random().toString(36).substring(2, 5);
+        setToasts(prev => [...prev, { id, message, type }]);
+        setTimeout(() => {
+          setToasts(prev => prev.filter(t => t.id !== id));
+        }, 3000);
+      };
+
+      const removeToast = (id) => {
+        setToasts(prev => prev.filter(t => t.id !== id));
+      };
+
+      // 統計加總
+      const cashTotals = useMemo(() => {
+        let bu = 0, chu = 0;
+        accounts.forEach(a => {
+          if (a.owner === 'Bu') bu += a.balance;
+          if (a.owner === 'Chu') chu += a.balance;
+        });
+        return { bu, chu, total: bu + chu };
+      }, [accounts]);
+
+      const stockTotals = useMemo(() => {
+        let bu = 0, chu = 0, totalCost = 0, totalValue = 0;
+        stocks.forEach(s => {
+          const cost = s.shares * s.avgCost;
+          const val = s.shares * s.currentPrice;
+          totalCost += cost;
+          totalValue += val;
+          if (s.owner === 'Bu') bu += val;
+          if (s.owner === 'Chu') chu += val;
+        });
+        const profit = totalValue - totalCost;
+        return { bu, chu, total: totalValue, profit, profitPercent: totalCost > 0 ? (profit / totalCost) * 100 : 0 };
+      }, [stocks]);
+
+      const sideHustleStats = useMemo(() => {
+        const activeOrders = orders.filter(o => o.batchId === selectedBatchId);
+        const activeCost = activeOrders.reduce((sum, o) => sum + o.cost, 0);
+        const activeSales = activeOrders.reduce((sum, o) => sum + o.price, 0);
+        const activeProfit = activeOrders.reduce((sum, o) => sum + o.profit, 0);
+
+        const thisMonthOrders = orders.filter(o => o.date.indexOf('2026-05') === 0);
+        return {
+          activeCost, activeSales, activeProfit,
+          thisMonthSideHustleProfit: thisMonthOrders.reduce((sum, o) => sum + o.profit, 0),
+          orderCount: activeOrders.length
+        };
+      }, [orders, selectedBatchId]);
+
+      const cashflowStats = useMemo(() => {
+        const thisMonthTx = transactions.filter(t => t.date.indexOf('2026-05') === 0);
+        const income = thisMonthTx.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+        const expense = thisMonthTx.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+        return { income, expense, net: income - expense };
+      }, [transactions]);
+
+      const familyTotalAssets = cashTotals.total + stockTotals.total + sideHustleStats.activeProfit;
+      const familyMonthProfit = cashflowStats.net + sideHustleStats.thisMonthSideHustleProfit;
+
+      const assetDistribution = useMemo(() => {
+        const buCash = cashTotals.bu;
+        const chuCash = cashTotals.chu;
+        const stockVal = stockTotals.total;
+        const sideHustleRoll = sideHustleStats.activeProfit;
+        const sum = buCash + chuCash + stockVal + sideHustleRoll;
+        if (sum === 0) return { buCashPct: 0, chuCashPct: 0, stockPct: 0, hustlePct: 0 };
+        return {
+          buCashPct: (buCash / sum) * 100,
+          chuCashPct: (chuCash / sum) * 100,
+          stockPct: (stockVal / sum) * 100,
+          hustlePct: (sideHustleRoll / sum) * 100,
+          buCash, chuCash, stockVal, sideHustleRoll
+        };
+      }, [cashTotals, stockTotals, sideHustleStats.activeProfit]);
+
+      const toggleOrderStatus = (orderId) => {
+        const cycle = ['待買項目', '已買項目', '已出貨'];
+        setOrders(prev => prev.map(o => {
+          if (o.id === orderId) {
+            const nextIdx = (cycle.indexOf(o.status) + 1) % cycle.length;
+            const nextStatus = cycle[nextIdx];
+            showToast("訂單「" + o.client + "」已更新為 " + nextStatus + "!", 'info');
+            return Object.assign({}, o, { status: nextStatus });
+          }
+          return o;
+        }));
+      };
+
+      const simulateGoogleFormImport = () => {
+        const randomGood = SIMULATED_GOODS[Math.floor(Math.random() * SIMULATED_GOODS.length)];
+        const randomClient = SIMULATED_CLIENTS[Math.floor(Math.random() * SIMULATED_CLIENTS.length)];
+        const quantity = Math.floor(Math.random() * 3) + 1;
+        const cost = randomGood.cost * quantity;
+        const price = randomGood.price * quantity;
+        
+        const newOrder = {
+          id: 'o_g_' + Date.now(),
+          date: new Date().toISOString().split('T')[0],
+          client: randomClient,
+          channel: 'Google表單',
+          item: randomGood.item + " x " + quantity,
+          cost, price, profit: price - cost,
+          status: '待買項目',
+          batchId: selectedBatchId
+        };
+        setOrders(prev => [newOrder, ...prev]);
+        showToast("📥 堅果表單自動匯入成功！" + randomClient + " 訂購了 " + randomGood.item, 'success');
+      };
+
+      const triggerStockPriceUpdate = () => {
+        setIsUpdatingStock(true);
+        setTimeout(() => {
+          setStocks(prev => prev.map(s => {
+            const change = (Math.random() * 7 - 2.5) / 100;
+            return Object.assign({}, s, { currentPrice: Math.round((s.currentPrice * (1 + change)) * 100) / 100 });
+          }));
+          setIsUpdatingStock(false);
+          showToast('📈 證券即時行情更新完成！', 'success');
+        }, 800);
+      };
+
+      const getFuzzyPriceMatches = (query) => {
+        if (!query || query.trim().length < 1) return [];
+        const matched = [];
+        const seen = new Set();
+        orders.forEach(o => {
+          const cleanItem = o.item.split(' x ')[0];
+          if (cleanItem.toLowerCase().indexOf(query.toLowerCase()) !== -1 && !seen.has(cleanItem)) {
+            seen.add(cleanItem);
+            const qtyMatch = o.item.match(/x\s*(\d+)/);
+            const qty = qtyMatch ? parseInt(qtyMatch[1], 10) : 1;
+            matched.push({
+              item: cleanItem,
+              unitCost: Math.round(o.cost / qty),
+              unitPrice: Math.round(o.price / qty)
+            });
+          }
+        });
+        return matched.slice(0, 3);
+      };
+
+      const openConfirmModal = (title, message, onConfirm) => {
+        setModal({ isOpen: true, title, message, onConfirm });
+      };
+
+      const handleOrderDelete = (id) => {
+        openConfirmModal('確認刪除訂單？', '此動作將影響本期盈餘計算。', () => {
+          setOrders(prev => prev.filter(o => o.id !== id));
+          setModal({ isOpen: false, title: '', message: '', onConfirm: null });
+          showToast('訂單已刪除', 'info');
+        });
+      };
+
+      const handleTransactionDelete = (id) => {
+        openConfirmModal('確認刪除記帳紀錄？', '這會從本月家庭收支中移除。', () => {
+          setTransactions(prev => prev.filter(t => t.id !== id));
+          setModal({ isOpen: false, title: '', message: '', onConfirm: null });
+          showToast('記帳紀錄已刪除', 'info');
+        });
+      };
+
+      const handleStockDelete = (id) => {
+        openConfirmModal('確認刪除此持股？', '這會將其自您的持股列表中移除。', () => {
+          setStocks(prev => prev.filter(s => s.id !== id));
+          setModal({ isOpen: false, title: '', message: '', onConfirm: null });
+          showToast('持股已移除', 'info');
+        });
+      };
+
+      const handleAccountDelete = (id) => {
+        openConfirmModal('確認刪除此帳戶？', '這會將此帳戶自餘額盤點列表中移除，但不會影響已錄入的歷史流水帳目。', () => {
+          setAccounts(prev => prev.filter(a => a.id !== id));
+          setModal({ isOpen: false, title: '', message: '', onConfirm: null });
+          setSheet({ isOpen: false, type: '', data: null });
+          showToast('帳戶已成功移除', 'info');
+        });
+      };
+
+      // Excel 數據寫入合併
+      const handleExcelImport = (importedList) => {
+        if (importedList.length === 0) {
+          showToast('⚠️ 解析無效，請檢查 Excel 資料格式。', 'error');
+          return;
+        }
+        setTransactions(prev => [...importedList, ...prev]);
+        showToast("🎉 成功從 Excel 匯入 " + importedList.length + " 筆歷史收支！", 'success');
+      };
+
+      const handleSheetSubmit = (e, formData) => {
+        e.preventDefault();
+        const { type, data } = sheet;
+
+        if (type === 'reconcile') {
+          const bal = parseFloat(formData.balance);
+          setAccounts(prev => prev.map(a => a.id === data.id ? Object.assign({}, a, { name: formData.name, owner: formData.owner, balance: bal }) : a));
+          showToast("帳戶資料與餘額已校準！", 'success');
+        } else if (type === 'addAccount') {
+          const bal = parseFloat(formData.balance) || 0;
+          const newAcc = {
+            id: 'a_' + Date.now(),
+            name: formData.name,
+            balance: bal,
+            owner: formData.owner
+          };
+          setAccounts(prev => [...prev, newAcc]);
+          showToast("🏦 實體帳戶「" + formData.name + "」已成功加入！", 'success');
+        } else if (type === 'addOrder') {
+          const cost = parseFloat(formData.cost) || 0;
+          const price = parseFloat(formData.price) || 0;
+          const newOrder = {
+            id: 'o_m_' + Date.now(),
+            date: formData.date || new Date().toISOString().split('T')[0],
+            client: formData.client || '手動IG買家',
+            channel: 'IG手動',
+            item: formData.item,
+            cost, price, profit: price - cost,
+            status: '待買項目',
+            batchId: selectedBatchId
+          };
+          setOrders(prev => [newOrder, ...prev]);
+          showToast("🛍️ IG 訂單登錄成功！", 'success');
+        } else if (type === 'addTransaction') {
+          const amt = parseFloat(formData.amount) || 0;
+          const newTx = {
+            id: 't_' + Date.now(),
+            date: formData.date || new Date().toISOString().split('T')[0],
+            type: formData.txType,
+            amount: amt,
+            category: formData.category,
+            owner: formData.owner,
+            desc: formData.desc || ''
+          };
+          setTransactions(prev => [newTx, ...prev]);
+          showToast("🏦 收支帳登錄成功！", 'success');
+        } else if (type === 'addStock') {
+          const shs = parseInt(formData.shares, 10) || 0;
+          const cst = parseFloat(formData.avgCost) || 0;
+          const cur = parseFloat(formData.currentPrice) || cst;
+          const newStk = {
+            id: 's_' + Date.now(),
+            symbol: formData.symbol.toUpperCase(),
+            name: formData.name || formData.symbol.toUpperCase(),
+            shares: shs, avgCost: cst, currentPrice: cur,
+            owner: formData.owner
+          };
+          setStocks(prev => [...prev, newStk]);
+          showToast("📈 " + newStk.symbol + " 已加入持股組合！", 'success');
+        }
+
+        setSheet({ isOpen: false, type: '', data: null });
+      };
+
+      return (
+        <div className="relative mx-auto w-full max-w-[395px] h-[852px] sm:h-[844px] rounded-[52px] border-[12px] border-zinc-800 bg-zinc-950 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.95)] ring-[4px] ring-zinc-700/20 overflow-hidden flex flex-col max-sm:h-screen max-sm:w-full max-sm:max-w-none max-sm:rounded-none max-sm:border-0 max-sm:ring-0">
+          
+          {/* iOS Dynamic Island */}
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 w-28 h-6 bg-black rounded-full z-50 flex items-center justify-between px-3.5 max-sm:hidden">
+            <span className="w-1.5 h-1.5 rounded-full bg-zinc-900 shadow-[inset_0_1px_2px_rgba(255,255,255,0.2)]"></span>
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-900/60 shadow-[inset_0_1px_2px_rgba(0,0,0,0.8)]"></span>
+            <span className="w-1 h-1 rounded-full bg-green-500/80 animate-pulse"></span>
+          </div>
+
+          {/* iOS Status Bar */}
+          <div className="h-11 px-6 pt-3.5 flex items-center justify-between text-[11px] font-bold text-zinc-400 z-40 bg-zinc-950/20 backdrop-blur-sm select-none max-sm:hidden flex-shrink-0">
+            <span>09:41</span>
+            <div className="flex items-center gap-1.5">
+              <svg className="w-3.5 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3c-1.2 0-2.4.2-3.6.7L12 12l3.6-8.3c-1.2-.5-2.4-.7-3.6-.7zm0 18c4.4 0 8-3.6 8-8s-3.6-8-8-8-8 3.6-8 8 3.6 8 8 8zm0-14.5c3.6 0 6.5 2.9 6.5 6.5s-2.9 6.5-6.5 6.5S5.5 14.6 5.5 11s2.9-6.5 6.5-6.5z"/></svg>
+              <svg className="w-3.5 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21l-12-12c4.4-4.4 10.4-6.8 16.8-6.8s12.4 2.4 16.8 6.8l-12 12zm0-4.8l8.4-8.4c-2.4-2.4-5.4-3.6-8.4-3.6s-6 1.2-8.4 3.6l8.4 8.4z"/></svg>
+              <div className="w-5 h-2.5 rounded-sm border border-zinc-500 p-[1px] flex items-center">
+                <div className="h-full w-4/5 bg-zinc-300 rounded-2xs"></div>
+              </div>
+            </div>
+          </div>
+
+          {/* Core App View */}
+          <div className="flex-1 flex flex-col justify-between overflow-y-auto no-scrollbar relative bg-zinc-950 text-zinc-100 bg-grid-overlay bg-glow-pink bg-glow-blue pb-24">
+            
+            {/* Header */}
+            <header className="pt-6 pb-4 px-5 border-b border-zinc-900/60 flex items-center justify-between sticky top-0 bg-zinc-950/80 backdrop-blur-lg z-30">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-purple-600 via-pink-500 to-blue-500 p-[1.5px] shadow-lg">
+                  <div className="w-full h-full bg-zinc-950 rounded-[14px] flex items-center justify-center">
+                    <span className="font-extrabold text-sm tracking-widest bg-gradient-to-r from-pink-400 to-blue-400 bg-clip-text text-transparent">CoFi</span>
+                  </div>
+                </div>
+                <div>
+                  <h1 className="font-extrabold text-base tracking-wide">CoFi 家庭聯名帳本</h1>
+                  <p className="text-[10px] text-zinc-400 font-medium tracking-wider">BU 🐟 ✕ CHU 🦦 WAR ROOM</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 font-bold">
+                <button 
+                  onClick={() => setSheet({ isOpen: true, type: 'settings', data: null })}
+                  className="w-7 h-7 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400 flex items-center justify-center hover:text-purple-400 hover:border-purple-500/30 transition-all active-press"
+                  title="跨裝置資料同步與備份"
+                >
+                  <Icon name="Settings" size={14} />
+                </button>
+                <div className="flex gap-1">
+                  <span className="px-1.5 py-0.5 rounded-full bg-pink-500/10 border border-pink-500/30 text-[9px] text-pink-400">Bu 🐟</span>
+                  <span className="px-1.5 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/30 text-[9px] text-blue-400">Chu 🦦</span>
+                </div>
+              </div>
+            </header>
+
+            {/* Main scrollable section */}
+            <main className="flex-1 overflow-y-auto px-4 py-4 no-scrollbar">
+              
+              {/* Dashboard */}
+              {activeTab === 'dashboard' && (
+                <div className="space-y-5 animate-fadeIn">
+                  <div className="premium-card rounded-2xl p-5 relative overflow-hidden bg-gradient-to-b from-zinc-900/90 to-zinc-950/90">
+                    <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-amber-500/10 to-transparent rounded-full filter blur-xl"></div>
+                    <p className="text-[11px] font-bold text-zinc-400 tracking-wider flex items-center gap-1">
+                      💰 合併家庭總資產
+                      <span className="text-[9px] bg-amber-500/10 border border-amber-500/20 text-amber-400 px-1.5 py-0.2 rounded-full font-bold">月底定期盤點</span>
+                    </p>
+                    <div className="flex items-baseline gap-1 mt-2">
+                      <span className="text-3xl font-extrabold bg-gradient-to-r from-amber-200 via-yellow-400 to-amber-300 bg-clip-text text-transparent tracking-tight">
+                        ${Math.round(familyTotalAssets).toLocaleString()}
+                      </span>
+                      <span className="text-xs text-zinc-500 font-bold">TWD</span>
+                    </div>
+                    <div className="flex justify-between items-center mt-3 pt-3 border-t border-zinc-800/60 text-[11px] text-zinc-400">
+                      <span>銀行現金: ${Math.round(cashTotals.total).toLocaleString()}</span>
+                      <span>證券市值: ${Math.round(stockTotals.total).toLocaleString()}</span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="premium-card rounded-2xl p-4 border-emerald-500/10">
+                      <p className="text-[10px] font-bold text-zinc-400 tracking-wider">📈 5月總盈餘</p>
+                      <p className="text-xl font-extrabold text-emerald-400 mt-1.5">+${Math.round(familyMonthProfit).toLocaleString()}</p>
+                      <p className="text-[9px] text-zinc-500 mt-1">主業薪水結餘 + 副業</p>
+                    </div>
+
+                    <div className="premium-card rounded-2xl p-4 border-purple-500/10">
+                      <p className="text-[10px] font-bold text-zinc-400 tracking-wider">🛍️ 好物推推淨利</p>
+                      <p className="text-xl font-extrabold text-purple-400 mt-1.5">+${Math.round(sideHustleStats.activeProfit).toLocaleString()}</p>
+                      <p className="text-[9px] text-zinc-500 mt-1">本檔已實現毛盈餘</p>
+                    </div>
+                  </div>
+
+                  {/* Horizontal Progress Bar */}
+                  <div className="premium-card rounded-2xl p-4 space-y-3.5">
+                    <h3 className="text-xs font-extrabold text-zinc-300 flex items-center gap-1.5">
+                      <Icon name="PieChart" className="text-purple-400" />
+                      合併家庭資產貢獻佔比
+                    </h3>
+                    
+                    <div className="h-4 w-full rounded-full bg-zinc-800 overflow-hidden flex shadow-inner">
+                      {assetDistribution.buCashPct > 0 && <div style={{ width: assetDistribution.buCashPct + "%" }} className="h-full bg-gradient-to-r from-pink-500 to-purple-500" />}
+                      {assetDistribution.chuCashPct > 0 && <div style={{ width: assetDistribution.chuCashPct + "%" }} className="h-full bg-gradient-to-r from-blue-500 to-indigo-600" />}
+                      {assetDistribution.stockPct > 0 && <div style={{ width: assetDistribution.stockPct + "%" }} className="h-full bg-gradient-to-r from-amber-400 to-orange-500" />}
+                      {assetDistribution.hustlePct > 0 && <div style={{ width: assetDistribution.hustlePct + "%" }} className="h-full bg-gradient-to-r from-purple-500 to-fuchsia-600" />}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-2 pt-1 text-[11px] text-zinc-400 font-bold">
+                      <div className="flex justify-between">
+                        <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-pink-500"></span>Bu 實體存款</div>
+                        <span className="text-zinc-200">{assetDistribution.buCashPct.toFixed(1)}%</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-blue-500"></span>Chu 實體存款</div>
+                        <span className="text-zinc-200">{assetDistribution.chuCashPct.toFixed(1)}%</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-400"></span>雙人證券市值</div>
+                        <span className="text-zinc-200">{assetDistribution.stockPct.toFixed(1)}%</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-purple-500"></span>好物推推檔期利潤</div>
+                        <span className="text-zinc-200">{assetDistribution.hustlePct.toFixed(1)}%</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Target Tracker */}
+                  <div className="premium-card rounded-2xl p-5 bg-gradient-to-tr from-zinc-900 to-zinc-950">
+                    <div className="flex justify-between items-center mb-3">
+                      <div>
+                        <h4 className="text-xs font-extrabold text-zinc-300">🎯 第一階段共同財務目標</h4>
+                        <p className="text-[10px] text-zinc-500 font-bold mt-0.5">買房頭期款 & 創業儲備基金</p>
+                      </div>
+                      <span className="text-xs font-black text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                        {((familyTotalAssets / 3000000) * 100).toFixed(1)}%
+                      </span>
+                    </div>
+                    <div className="h-2.5 w-full bg-zinc-800 rounded-full overflow-hidden mb-3">
+                      <div style={{ width: Math.min((familyTotalAssets / 3000000) * 100, 100) + "%" }} className="h-full rounded-full bg-gradient-to-r from-purple-500 via-pink-500 to-blue-500 shadow-premium-glow" />
+                    </div>
+                    <div className="flex justify-between text-[11px] font-bold text-zinc-400">
+                      <span>累計已達: ${Math.round(familyTotalAssets).toLocaleString()}</span>
+                      <span>終極目標: $3,000,000</span>
+                    </div>
+
+                    {/* Chat logs */}
+                    <div className="mt-4 p-3 rounded-xl bg-zinc-950/60 border border-zinc-900 flex gap-2.5 items-start">
+                      <div className="w-7 h-7 rounded-lg bg-pink-500/10 flex items-center justify-center text-xs flex-shrink-0 text-pink-400 font-extrabold">🐟</div>
+                      <div className="flex-1">
+                        <p className="text-[11px] leading-relaxed text-zinc-300 italic">「老公加油！我們的副業和股市都在往上前進！」</p>
+                        <p className="text-[9px] font-bold text-zinc-500 mt-1 text-right">— Bu 🐟 在團購包裝桌前寫下</p>
+                      </div>
+                    </div>
+                    <div className="mt-2 p-3 rounded-xl bg-zinc-950/60 border border-zinc-900 flex gap-2.5 items-start">
+                      <div className="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center text-xs flex-shrink-0 text-blue-400 font-extrabold">🦦</div>
+                      <div className="flex-1">
+                        <p className="text-[11px] leading-relaxed text-zinc-300 italic">「老婆辛苦了，今天妳努力推推，我晚上寫完 Code 幫忙打包出貨！」</p>
+                        <p className="text-[9px] font-bold text-zinc-500 mt-1 text-right">— Chu 🦦 邊看台積電線圖邊覆</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Bu's Side Hustle */}
+              {activeTab === 'hustle' && (
+                <div className="space-y-4 animate-fadeIn">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-sm font-extrabold text-zinc-200">🛍 好物推推副業看板</h2>
+                      <p className="text-[10px] text-zinc-500 font-bold mt-0.5">堅果團購與 IG 服飾手動下單</p>
+                    </div>
+                    <select 
+                      value={selectedBatchId} 
+                      onChange={(e) => setSelectedBatchId(e.target.value)}
+                      className="bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 font-bold rounded-xl px-2 py-1.5 outline-none"
+                    >
+                      {batches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                    </select>
+                  </div>
+
+                  <div className="premium-card rounded-2xl p-4 border-purple-500/20">
+                    <div className="grid grid-cols-3 text-center gap-2">
+                      <div>
+                        <p className="text-[9px] font-bold text-zinc-500">本檔總成本</p>
+                        <p className="text-sm font-extrabold text-zinc-300 mt-1">${sideHustleStats.activeCost.toLocaleString()}</p>
+                      </div>
+                      <div className="border-x border-zinc-800/80">
+                        <p className="text-[9px] font-bold text-zinc-500">本檔營業額</p>
+                        <p className="text-sm font-extrabold text-zinc-300 mt-1">${sideHustleStats.activeSales.toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] font-bold text-purple-400">本檔毛利潤</p>
+                        <p className="text-base font-black text-purple-400 mt-1.5">+${sideHustleStats.activeProfit.toLocaleString()}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <button onClick={() => setSheet({ isOpen: true, type: 'addOrder', data: null })} className="py-2.5 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 font-bold text-xs flex items-center justify-center gap-1.5 shadow-lg active-press text-white">
+                      <Icon name="Plus" size={14} />手動 IG 報價登錄
+                    </button>
+                    <button onClick={simulateGoogleFormImport} className="py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-200 font-bold text-xs flex items-center justify-center gap-1.5 active-press">
+                      <Icon name="FileText" size={14} className="text-green-400" />模擬 Google 表單匯入
+                    </button>
+                  </div>
+
+                  <div className="space-y-2.5">
+                    <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
+                      {['全部', '待買項目', '已買項目', '已出貨'].map(s => (
+                        <button key={s} onClick={() => setOrderFilter(s)} className={`px-3 py-1 rounded-full text-[10px] font-extrabold transition-all ${orderFilter === s ? 'bg-purple-600 text-white shadow-premium-glow' : 'bg-zinc-900 text-zinc-400 border border-zinc-800'}`}>{s}</button>
+                      ))}
+                    </div>
+
+                    <div className="space-y-2">
+                      {orders.filter(o => o.batchId === selectedBatchId && (orderFilter === '全部' || o.status === orderFilter)).map(order => (
+                        <div key={order.id} className="premium-card rounded-xl p-3.5 flex items-center justify-between border-zinc-800/80">
+                          <div className="space-y-1.5 flex-1 pr-3">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-extrabold text-xs text-zinc-200">{order.client}</span>
+                              <span className={`px-1.5 py-0.5 rounded text-[8px] font-extrabold ${order.channel === 'Google表單' ? 'bg-green-500/10 text-green-400' : 'bg-pink-500/10 text-pink-400'}`}>{order.channel}</span>
+                              <span className="text-[9px] text-zinc-500">{order.date}</span>
+                            </div>
+                            <p className="text-[11px] font-bold text-zinc-300">{order.item}</p>
+                            <div className="flex gap-3 text-[10px] text-zinc-400">
+                              <span>進價: ${order.cost}</span>
+                              <span>售價: ${order.price}</span>
+                              <span className="text-purple-400 font-bold">淨利: ${order.profit}</span>
+                            </div>
+                          </div>
+                          <div className="flex flex-col items-end gap-2">
+                            <button onClick={() => toggleOrderStatus(order.id)} className={`px-2 py-1 rounded text-[9px] font-black flex items-center gap-1 ${order.status === '待買項目' ? 'bg-yellow-500/10 text-yellow-400' : order.status === '已買項目' ? 'bg-blue-500/10 text-blue-400' : 'bg-green-500/10 text-green-400'}`}>
+                              {order.status}
+                            </button>
+                            <button onClick={() => handleOrderDelete(order.id)} className="text-zinc-600 hover:text-red-400"><Icon name="Trash2" size={12} /></button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Cashflow & Accounts */}
+              {activeTab === 'cashflow' && (
+                <div className="space-y-5 animate-fadeIn">
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <h3 className="text-xs font-extrabold text-zinc-300 tracking-wider">🏦 月底實體帳戶對帳</h3>
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => setSheet({ isOpen: true, type: 'addAccount', data: null })}
+                          className="py-1 px-2 bg-zinc-900 border border-zinc-800 rounded-lg text-[9px] text-zinc-300 font-black flex items-center gap-1 active-press hover:border-zinc-700"
+                        >
+                          <Icon name="Plus" size={10} className="text-purple-400" />
+                          新增帳戶
+                        </button>
+                        <span className="text-[11px] font-black text-zinc-400">合併現金: <span className="text-zinc-200">${cashTotals.total.toLocaleString()}</span></span>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      {accounts.map(acc => (
+                        <div key={acc.id} className={`premium-card rounded-xl p-3.5 flex flex-col justify-between relative overflow-hidden ${acc.owner === 'Bu' ? 'premium-card-pink' : 'premium-card-blue'}`}>
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs font-extrabold text-zinc-200">{acc.name}</span>
+                            <span className="text-[8px] font-black">{acc.owner}</span>
+                          </div>
+                          <p className="text-base font-black text-zinc-100 mt-2">${Math.round(acc.balance).toLocaleString()}</p>
+                          <button onClick={() => setSheet({ isOpen: true, type: 'reconcile', data: acc })} className="mt-3 py-1.5 w-full bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-300 font-bold rounded-lg flex items-center justify-center gap-1 active-press"><Icon name="RefreshCw" size={10} />對帳</button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <h3 className="text-xs font-extrabold text-zinc-300 tracking-wider">📊 歷史收支流水帳簿</h3>
+                        <p className="text-[9px] text-zinc-500 mt-0.5">5月收支結餘: <span className={cashflowStats.net >= 0 ? 'text-emerald-400' : 'text-red-400'}>${cashflowStats.net.toLocaleString()}</span></p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => setSheet({ isOpen: true, type: 'excelImport', data: null })}
+                          className="py-1.5 px-2 bg-zinc-900 border border-zinc-800 rounded-lg text-[10px] text-zinc-300 font-black flex items-center gap-1 active-press hover:border-zinc-700"
+                          title="Excel 複製貼上快速解析匯入"
+                        >
+                          <Icon name="FileSpreadsheet" size={11} className="text-purple-400" />
+                          Excel 匯入
+                        </button>
+                        <button onClick={() => setSheet({ isOpen: true, type: 'addTransaction', data: null })} className="py-1.5 px-3 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-lg text-[10px] font-black flex items-center gap-1 active-press text-white"><Icon name="Plus" size={10} />手動記帳</button>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-1.5">
+                      {['全部', 'Bu 🐟', 'Chu 🦦', '共同 🤝'].map(m => (
+                        <button key={m} onClick={() => setCashflowFilter(m)} className={`px-3 py-1 rounded-full text-[10px] font-bold ${cashflowFilter === m ? 'bg-emerald-600 text-white' : 'bg-zinc-900 text-zinc-400 border border-zinc-800'}`}>{m}</button>
+                      ))}
+                    </div>
+
+                    <div className="space-y-2 max-h-[300px] overflow-y-auto no-scrollbar">
+                      {transactions.filter(t => {
+                        if (cashflowFilter === '全部') return true;
+                        if (cashflowFilter === 'Bu 🐟') return t.owner === 'Bu';
+                        if (cashflowFilter === 'Chu 🦦') return t.owner === 'Chu';
+                        return t.owner === '共同';
+                      }).map(tx => (
+                        <div key={tx.id} className="premium-card rounded-xl p-3 flex items-center justify-between border-zinc-800/80">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm ${tx.type === 'income' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-zinc-800 text-zinc-400'}`}>
+                              {tx.category === '主業薪資' ? <Icon name="DollarSign" size={16} /> : tx.category === '餐飲伙食' ? <Icon name="Coffee" size={16} /> : tx.category === '住宅房租' ? <Icon name="Home" size={16} /> : tx.category === '交通移動' ? <Icon name="TrendingUp" size={16} /> : <Icon name="ShoppingBag" size={16} />}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-extrabold text-xs text-zinc-200">{tx.category}</span>
+                                <span className={"text-[8px] font-extrabold px-1.5 py-0.2 rounded " + (tx.owner === 'Bu' ? 'bg-pink-500/10 text-pink-400' : tx.owner === 'Chu' ? 'bg-blue-500/10 text-blue-400' : 'bg-emerald-500/10 text-emerald-400')}>{tx.owner}</span>
+                              </div>
+                              <p className="text-[10px] text-zinc-400 font-bold">{tx.desc} <span className="text-zinc-600">• {tx.date}</span></p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className={`text-xs font-black ${tx.type === 'income' ? 'text-emerald-400' : 'text-zinc-200'}`}>{tx.type === 'income' ? '+' : '-'}${tx.amount.toLocaleString()}</span>
+                            <button onClick={() => handleTransactionDelete(tx.id)} className="text-zinc-600 hover:text-red-400"><Icon name="Trash2" size={12} /></button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Stocks */}
+              {activeTab === 'stocks' && (
+                <div className="space-y-4 animate-fadeIn">
+                  <div className="premium-card rounded-2xl p-5 relative overflow-hidden bg-gradient-to-b from-zinc-900 to-zinc-950">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-[10px] font-bold text-zinc-400 tracking-wider">📈 合併股票證券總市值</span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${stockTotals.profit >= 0 ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>{stockTotals.profit >= 0 ? '未實現損益 +' : '未實現損益 '}{stockTotals.profitPercent.toFixed(1)}%</span>
+                    </div>
+                    <div className="flex items-baseline gap-1 mt-1.5">
+                      <span className="text-2xl font-black text-zinc-100">${Math.round(stockTotals.total).toLocaleString()}</span>
+                      <span className="text-[10px] text-zinc-500 font-extrabold">TWD</span>
+                    </div>
+                    <p className="text-[10px] text-zinc-400 font-semibold mt-1">整體損益: <span className={stockTotals.profit >= 0 ? 'text-green-400' : 'text-red-400'}>{stockTotals.profit >= 0 ? '+' : ''}${Math.round(stockTotals.profit).toLocaleString()}</span></p>
+
+                    <div className="mt-4 pt-3.5 border-t border-zinc-800/80 flex justify-between gap-3">
+                      <button onClick={triggerStockPriceUpdate} disabled={isUpdatingStock} className="py-1.5 px-3 bg-zinc-900 border border-zinc-800 text-zinc-300 rounded-lg text-[10px] font-bold flex items-center gap-1.5 hover:border-zinc-700 disabled:opacity-50 active-press">
+                        <Icon name="RefreshCw" size={10} className={isUpdatingStock ? 'animate-spin' : ''} />模擬更新即時股價
+                      </button>
+                      <button onClick={() => setSheet({ isOpen: true, type: 'addStock', data: null })} className="py-1.5 px-3.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg text-[10px] font-black active-press flex items-center gap-1 shadow-md shadow-blue-500/15">
+                        <Icon name="Plus" size={10} />新增持股
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3.5">
+                    <h3 className="text-xs font-extrabold text-zinc-300">📋 台美持股明細</h3>
+                    <div className="space-y-2">
+                      {stocks.map(stk => {
+                        const cost = stk.shares * stk.avgCost;
+                        const val = stk.shares * stk.currentPrice;
+                        const profit = val - cost;
+                        const pct = cost > 0 ? (profit / cost) * 100 : 0;
+                        return (
+                          <div key={stk.id} className={"premium-card rounded-xl p-3.5 flex justify-between items-center border-zinc-800/80 relative overflow-hidden " + (stk.owner === 'Bu' ? 'premium-card-pink' : 'premium-card-blue')}>
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs font-black text-zinc-100">{stk.symbol}</span>
+                                <span className="text-[10px] text-zinc-400 font-bold">{stk.name}</span>
+                                <span className="text-[8px] font-black">{stk.owner}</span>
+                              </div>
+                              <div className="flex gap-4 text-[10px] text-zinc-400">
+                                <span>股數: {stk.shares}</span>
+                                <span>成本: ${stk.avgCost}</span>
+                                <span>現價: ${stk.currentPrice}</span>
+                              </div>
+                            </div>
+                            <div className="flex flex-col items-end gap-1">
+                              <p className="text-xs font-black">${Math.round(val).toLocaleString()}</p>
+                              <p className={`text-[9px] font-bold ${profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>{profit >= 0 ? '+' : ''}${Math.round(profit).toLocaleString()} ({profit >= 0 ? '+' : ''}{pct.toFixed(1)}%)</p>
+                              <button onClick={() => handleStockDelete(stk.id)} className="text-zinc-600 hover:text-red-400"><Icon name="Trash2" size={11} /></button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+            </main>
+
+            {/* Bottom Navigation Dock */}
+            <nav className="absolute bottom-0 left-0 right-0 bg-zinc-900/80 backdrop-blur-xl border-t border-zinc-800/80 px-4 pt-3 pb-7 flex justify-around z-30 shadow-2xl">
+              <button onClick={() => setActiveTab('dashboard')} className={"flex flex-col items-center gap-1 transition-all " + (activeTab === 'dashboard' ? 'text-purple-400 scale-105' : 'text-zinc-400')}>
+                <Icon name="Home" size={20} /><span className="text-[10px] font-extrabold tracking-wide">💰 大盤</span>
+              </button>
+              <button onClick={() => setActiveTab('hustle')} className={"flex flex-col items-center gap-1 transition-all " + (activeTab === 'hustle' ? 'text-purple-400 scale-105' : 'text-zinc-400')}>
+                <Icon name="ShoppingBag" size={20} /><span className="text-[10px] font-extrabold tracking-wide">🛍 好物推推</span>
+              </button>
+              <button onClick={() => setActiveTab('cashflow')} className={"flex flex-col items-center gap-1 transition-all " + (activeTab === 'cashflow' ? 'text-purple-400 scale-105' : 'text-zinc-400')}>
+                <Icon name="Landmark" size={20} /><span className="text-[10px] font-extrabold tracking-wide">🏦 收支對帳</span>
+              </button>
+              <button onClick={() => setActiveTab('stocks')} className={"flex flex-col items-center gap-1 transition-all " + (activeTab === 'stocks' ? 'text-purple-400 scale-105' : 'text-zinc-400')}>
+                <Icon name="TrendingUp" size={20} /><span className="text-[10px] font-extrabold tracking-wide">📈 證券投資</span>
+              </button>
+            </nav>
+
+            {/* Toast Container */}
+            <div className="absolute top-20 left-0 right-0 px-5 flex flex-col gap-2 z-50 pointer-events-none max-w-xs mx-auto">
+              {toasts.map(t => (
+                <div key={t.id} onClick={() => removeToast(t.id)} className={"pointer-events-auto p-3 rounded-xl border shadow-xl flex items-center justify-between gap-3 text-xs font-bold transition-all transform animate-slideIn " + (t.type === 'success' ? 'bg-zinc-900/90 text-green-400 border-green-500/30' : t.type === 'error' ? 'bg-zinc-900/90 text-red-400 border-red-500/30' : 'bg-zinc-900/90 text-purple-400 border-purple-500/30')}>
+                  <span>{t.message}</span><button className="text-zinc-500"><Icon name="X" size={12} /></button>
+                </div>
+              ))}
+            </div>
+
+            {/* Confirmation Modal */}
+            {modal.isOpen && (
+              <div className="absolute inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center px-6 animate-fadeIn">
+                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-xs p-5 shadow-2xl space-y-4">
+                  <div className="flex items-center gap-2 text-yellow-500">
+                    <Icon name="AlertTriangle" size={18} />
+                    <h4 className="font-extrabold text-sm text-zinc-100">{modal.title}</h4>
+                  </div>
+                  <p className="text-xs text-zinc-400 leading-relaxed font-semibold">{modal.message}</p>
+                  <div className="flex gap-2.5 pt-1">
+                    <button onClick={() => setModal({ isOpen: false, title: '', message: '', onConfirm: null })} className="flex-1 py-2 bg-zinc-800 border border-zinc-700 text-zinc-300 rounded-lg text-xs font-extrabold">取消</button>
+                    <button onClick={modal.onConfirm} className="flex-1 py-2 bg-red-600 text-white rounded-lg text-xs font-black shadow-lg">確認</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Bottom Sheet Drawer */}
+            {sheet.isOpen && (
+              <div className="absolute inset-0 bg-black/60 z-40 backdrop-blur-sm animate-fadeIn">
+                <div className="absolute inset-0" onClick={() => setSheet({ isOpen: false, type: '', data: null })} />
+                <div className="absolute bottom-0 left-0 right-0 max-w-md mx-auto bg-zinc-900 border-t border-zinc-800 rounded-t-3xl z-50 p-6 shadow-2xl flex flex-col max-h-[70vh] overflow-y-auto no-scrollbar animate-slideUp pb-8">
+                  <div className="w-12 h-1 bg-zinc-700 rounded-full mx-auto mb-5" />
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-extrabold text-sm text-zinc-200">
+                      {sheet.type === 'reconcile' && "編輯與對帳校準 - " + (sheet.data ? sheet.data.name : "")}
+                      {sheet.type === 'addAccount' && '🏦 新增日常對帳帳戶'}
+                      {sheet.type === 'addOrder' && '🛍️ 新增手動 IG 訂單'}
+                      {sheet.type === 'addTransaction' && '🏦 新增家庭日常記帳'}
+                      {sheet.type === 'addStock' && '📈 新增證券股票持股'}
+                      {sheet.type === 'excelImport' && '⚙️ Excel / 試算表快速匯入室'}
+                    </h3>
+                    <button onClick={() => setSheet({ isOpen: false, type: '', data: null })} className="p-1 rounded-full bg-zinc-800 text-zinc-400"><Icon name="X" size={14} /></button>
+                  </div>
+                  
+                  {/* Form dispatch */}
+                  <BottomSheetForm 
+                    sheet={sheet} 
+                    onSubmit={handleSheetSubmit} 
+                    getFuzzyPriceMatches={getFuzzyPriceMatches} 
+                    onExcelImport={handleExcelImport}
+                    onAccountDelete={handleAccountDelete}
+                    onSettingsImport={(payload) => {
+                      setAccounts(payload.accounts);
+                      setStocks(payload.stocks);
+                      setBatches(payload.batches);
+                      setOrders(payload.orders);
+                      setTransactions(payload.transactions);
+                      showToast('⚡ 跨裝置資料同步成功！已完美載入。', 'success');
+                      setSheet({ isOpen: false, type: '', data: null });
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
+          </div>
+
+          {/* iOS Bottom Home Bar */}
+          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-32 h-1 bg-zinc-700 rounded-full z-40 max-sm:hidden" />
+
+        </div>
+      );
+    }
+
+    // Bottom Sheet Form routing
+    function BottomSheetForm({ sheet, onSubmit, getFuzzyPriceMatches, onExcelImport, onSettingsImport, onAccountDelete }) {
+      const { type, data } = sheet;
+
+      const [balance, setBalance] = useState(data ? data.balance : '');
+      const [accName, setAccName] = useState(data ? data.name : '');
+      const [accOwner, setAccOwner] = useState(data ? data.owner : '共同');
+
+      const [orderForm, setOrderForm] = useState({
+        client: '', date: new Date().toISOString().split('T')[0], item: '', cost: '', price: ''
+      });
+      const [priceSuggestions, setPriceSuggestions] = useState([]);
+
+      const [txForm, setTxForm] = useState({
+        txType: 'expense', amount: '', category: '餐飲伙食', owner: '共同', date: new Date().toISOString().split('T')[0], desc: ''
+      });
+
+      const [stockForm, setStockForm] = useState({
+        symbol: '', name: '', shares: '', avgCost: '', currentPrice: '', owner: 'Chu'
+      });
+
+      // --- Excel 匯入表單專屬狀態 ---
+      const [importYear, setImportYear] = useState('2026');
+      const [excelText, setExcelText] = useState('');
+      const [parsedPreview, setParsedPreview] = useState([]);
+
+      // --- 設定與跨裝置同步專屬狀態 ---
+      const [importCode, setImportCode] = useState('');
+      const [copiedSync, setCopiedSync] = useState(false);
+
+      const getExportCode = () => {
+        try {
+          const payload = {
+            accounts: JSON.parse(localStorage.getItem('cofi_accounts') || '[]'),
+            stocks: JSON.parse(localStorage.getItem('cofi_stocks') || '[]'),
+            batches: JSON.parse(localStorage.getItem('cofi_batches') || '[]'),
+            orders: JSON.parse(localStorage.getItem('cofi_orders') || '[]'),
+            transactions: JSON.parse(localStorage.getItem('cofi_transactions') || '[]'),
+            timestamp: Date.now()
+          };
+          return btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+        } catch (e) {
+          return '';
+        }
+      };
+
+      // 解析 Excel 貼上 TSV 資料的引擎
+      const handleParseExcel = () => {
+        if (!excelText.trim()) return;
+        const lines = excelText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        if (lines.length === 0) return;
+
+        const parsedTxs = [];
+        
+        // A. 判定是否為您所屬的「花費項目 | Jan | Feb ...」月度總表格式
+        const isMonthlyMatrix = lines[0].toLowerCase().indexOf('jan') !== -1 || lines[0].toLowerCase().indexOf('feb') !== -1 || lines[0].toLowerCase().indexOf('mar') !== -1;
+
+        if (isMonthlyMatrix) {
+          const headers = lines[0].split('\t').map(h => h.trim());
+          const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+          const monthCols = [];
+          
+          headers.forEach((h, idx) => {
+            const matchIdx = months.indexOf(h.toLowerCase());
+            if (matchIdx !== -1) monthCols.push({ monthIdx: matchIdx, colIndex: idx });
+          });
+
+          for (let i = 1; i < lines.length; i++) {
+            const parts = lines[i].split('\t').map(p => p.trim());
+            if (parts.length === 0 || !parts[0]) continue;
+            
+            const itemName = parts[0];
+            if (
+              itemName.toLowerCase() === 'total' || 
+              itemName.includes('存入總額') || 
+              itemName.includes('達標率') || 
+              itemName.includes('新水總額')
+            ) continue;
+
+            const isIncome = itemName.includes('薪水') || itemName.includes('配息') || itemName.includes('賺取') || itemName.includes('代購賺') || itemName.includes('收入');
+            
+            let owner = '共同';
+            if (itemName.includes('Bu') || itemName.includes('代購') || itemName.includes('🐈')) owner = 'Bu'; 
+            if (itemName.includes('Chu')) owner = 'Chu';
+
+            let category = '其他';
+            if (itemName.includes('房貸') || itemName.includes('裝潢') || itemName.includes('電費') || itemName.includes('水電') || itemName.includes('電信')) category = '住宅房租';
+            else if (itemName.includes('生活費') || itemName.includes('餐') || itemName.includes('伙食')) category = '餐飲伙食';
+            else if (itemName.includes('車') || itemName.includes('交通') || itemName.includes('貸款')) category = '交通移動';
+            else if (itemName.includes('保養') || itemName.includes('治裝') || itemName.includes('旅遊') || itemName.includes('休閒') || itemName.includes('娛樂') || itemName.includes('紅包') || itemName.includes('禮品')) category = '娛樂生活';
+            else if (itemName.includes('薪水') || itemName.includes('薪資')) category = '主業薪資';
+            else if (itemName.includes('代購') || itemName.includes('副業')) category = '副業滾存';
+
+            monthCols.forEach(col => {
+              if (col.colIndex < parts.length) {
+                const valStr = parts[col.colIndex];
+                if (valStr && valStr.trim() !== '') {
+                  const cleanVal = parseFloat(valStr.replace(/[$,\s]/g, ''));
+                  if (!isNaN(cleanVal) && cleanVal !== 0) {
+                    const mStr = String(col.monthIdx + 1).padStart(2, '0');
+                    parsedTxs.push({
+                      id: `excel_matrix_${i}_${col.monthIdx}_` + Date.now(),
+                      date: `${importYear}-${mStr}-28`, 
+                      type: isIncome ? 'income' : 'expense',
+                      amount: cleanVal,
+                      category,
+                      owner,
+                      desc: itemName + " (歷史Excel匯入)"
+                    });
+                  }
+                }
+              }
+            });
+          }
+        } else {
+          // B. 流水明細帳 (格式：日期\t類型\t金額\t分類\t擁有者\t備註)
+          lines.forEach((line, idx) => {
+            const parts = line.split('\t').map(p => p.trim());
+            if (parts.length < 3) return;
+            
+            const date = parts[0];
+            const typeStr = parts[1];
+            const amount = parseFloat(parts[2].replace(/[$,\s]/g, ''));
+            const category = parts[3] || '其他';
+            const owner = parts[4] || '共同';
+            const desc = parts[5] || '';
+
+            if (date && !isNaN(amount)) {
+              const type = (typeStr === '收入' || typeStr === 'income') ? 'income' : 'expense';
+              parsedTxs.push({
+                id: 'excel_tsv_' + idx + '_' + Date.now(),
+                date: date.indexOf('-') !== -1 ? date : new Date(date).toISOString().split('T')[0],
+                type,
+                amount,
+                category,
+                owner,
+                desc
+              });
+            }
+          });
+        }
+
+        setParsedPreview(parsedTxs);
+      };
+
+      const handleItemNameChange = (e) => {
+        const val = e.target.value;
+        setOrderForm(prev => Object.assign({}, prev, { item: val }));
+        setPriceSuggestions(getFuzzyPriceMatches(val));
+      };
+
+      const applySuggestion = (sug) => {
+        setOrderForm(prev => Object.assign({}, prev, { item: sug.item, cost: sug.unitCost, price: sug.unitPrice }));
+        setPriceSuggestions([]);
+      };
+
+      switch (type) {
+        case 'reconcile':
+          return (
+            <form onSubmit={(e) => onSubmit(e, { name: accName, owner: accOwner, balance })} className="space-y-4 text-left">
+              <div>
+                <label className="text-[10px] font-bold text-zinc-400 block mb-1">帳戶名稱 *</label>
+                <input type="text" required value={accName} onChange={(e) => setAccName(e.target.value)} className="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-100 rounded-xl outline-none" placeholder="編輯帳戶名稱" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-400 block mb-1">持有者 *</label>
+                  <select value={accOwner} onChange={(e) => setAccOwner(e.target.value)} className="w-full px-2.5 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-200 rounded-xl outline-none">
+                    <option value="共同">共同 🤝</option>
+                    <option value="Bu">Bu 🐟 (妻)</option>
+                    <option value="Chu">Chu 🦦 (夫)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-400 block mb-1">年底網銀餘額 ($) *</label>
+                  <input type="number" required value={balance} onChange={(e) => setBalance(e.target.value)} className="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-100 rounded-xl outline-none" placeholder="網銀即時餘額" />
+                </div>
+              </div>
+              <div className="flex gap-2.5 pt-1">
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    if (confirm(`確定要刪除帳戶「${data.name}」嗎？這將不會影響您的歷史流水帳目，但會將該帳戶自餘額盤點中移除。`)) {
+                      onAccountDelete(data.id);
+                    }
+                  }} 
+                  className="flex-1 py-2 bg-red-950/40 border border-red-500/30 text-red-400 font-extrabold text-xs rounded-xl hover:bg-red-900/30 active-press"
+                >
+                  🗑️ 刪除此帳戶
+                </button>
+                <button type="submit" className="flex-1 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-extrabold text-xs rounded-xl shadow-lg active-press">儲存更變</button>
+              </div>
+            </form>
+          );
+
+        case 'addAccount':
+          return (
+            <form onSubmit={(e) => onSubmit(e, { name: accName, owner: accOwner, balance })} className="space-y-3.5 text-left">
+              <div>
+                <label className="text-[10px] font-bold text-zinc-400 block mb-1">帳戶名稱 *</label>
+                <input type="text" required value={accName} onChange={(e) => setAccName(e.target.value)} className="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-100 rounded-xl outline-none" placeholder="例如：國泰世華、郵局、現金袋" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-400 block mb-1">持有者 *</label>
+                  <select value={accOwner} onChange={(e) => setAccOwner(e.target.value)} className="w-full px-2.5 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-200 rounded-xl outline-none">
+                    <option value="共同">共同 🤝</option>
+                    <option value="Bu">Bu 🐟 (妻)</option>
+                    <option value="Chu">Chu 🦦 (夫)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-400 block mb-1">初始餘額 ($) *</label>
+                  <input type="number" required value={balance} onChange={(e) => setBalance(e.target.value)} className="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-100 rounded-xl outline-none" placeholder="輸入當前金額" />
+                </div>
+              </div>
+              <button type="submit" className="w-full py-2.5 bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-extrabold text-xs rounded-xl shadow-lg active-press mt-2">建立新帳戶</button>
+            </form>
+          );
+
+        case 'addOrder':
+          return (
+            <form onSubmit={(e) => onSubmit(e, orderForm)} className="space-y-3.5">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-400 block mb-1">客戶姓名 *</label>
+                  <input type="text" required value={orderForm.client} onChange={(e) => setOrderForm(prev => Object.assign({}, prev, { client: e.target.value }))} className="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-100 rounded-xl outline-none" placeholder="王小明" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-400 block mb-1">下單日期</label>
+                  <input type="date" value={orderForm.date} onChange={(e) => setOrderForm(prev => Object.assign({}, prev, { date: e.target.value }))} className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 rounded-xl" />
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-zinc-400 block mb-1">購買品項與名稱 *</label>
+                <input type="text" required value={orderForm.item} onChange={handleItemNameChange} className="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-100 rounded-xl outline-none" placeholder="輸入商品關鍵字匹配歷史價..." />
+                
+                {priceSuggestions.length > 0 && (
+                  <div className="mt-1.5 p-2 rounded-xl bg-purple-500/10 border border-purple-500/20 space-y-1">
+                    <p className="text-[9px] font-black text-purple-400">💡 歷史報價一鍵套用：</p>
+                    {priceSuggestions.map((sug, i) => (
+                      <button key={i} type="button" onClick={() => applySuggestion(sug)} className="w-full text-left py-1 px-1.5 rounded bg-zinc-900/60 border border-zinc-800 text-[10px] font-bold text-zinc-300 hover:border-purple-500 flex justify-between">
+                        <span>{sug.item}</span><span className="text-purple-400 font-extrabold">進 ${sug.unitCost} / 售 ${sug.unitPrice}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-400 block mb-1">進貨成本 / 件 *</label>
+                  <input type="number" required value={orderForm.cost} onChange={(e) => setOrderForm(prev => Object.assign({}, prev, { cost: e.target.value }))} className="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-100 rounded-xl outline-none" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-400 block mb-1">代購售價 / 件 *</label>
+                  <input type="number" required value={orderForm.price} onChange={(e) => setOrderForm(prev => Object.assign({}, prev, { price: e.target.value }))} className="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-100 rounded-xl outline-none" />
+                </div>
+              </div>
+              <button type="submit" className="w-full py-2.5 bg-gradient-to-r from-pink-500 to-purple-600 text-white font-extrabold text-xs rounded-xl shadow-lg active-press mt-2">登錄 IG 訂單</button>
+            </form>
+          );
+
+        case 'addTransaction':
+          return (
+            <form onSubmit={(e) => onSubmit(e, txForm)} className="space-y-3.5">
+              <div className="flex gap-2 p-1 bg-zinc-950 rounded-xl border border-zinc-800">
+                <button type="button" onClick={() => setTxForm(p => Object.assign({}, p, { txType: 'expense' }))} className={`flex-1 py-1.5 text-xs font-extrabold rounded-lg ${txForm.txType === 'expense' ? 'bg-zinc-800 text-zinc-100 border' : 'text-zinc-500'}`}>支出 💸</button>
+                <button type="button" onClick={() => setTxForm(p => Object.assign({}, p, { txType: 'income' }))} className={`flex-1 py-1.5 text-xs font-extrabold rounded-lg ${txForm.txType === 'income' ? 'bg-emerald-600 text-white' : 'text-zinc-500'}`}>收入 💰</button>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-400 block mb-1">記帳對象 *</label>
+                  <select value={txForm.owner} onChange={(e) => setTxForm(p => Object.assign({}, p, { owner: e.target.value }))} className="w-full px-2.5 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-200 rounded-xl">
+                    <option value="共同">共同 🤝</option>
+                    <option value="Bu">Bu 🐟 (妻)</option>
+                    <option value="Chu">Chu 🦦 (夫)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-400 block mb-1">記帳日期</label>
+                  <input type="date" value={txForm.date} onChange={(e) => setTxForm(p => Object.assign({}, p, { date: e.target.value }))} className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 rounded-xl" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-400 block mb-1">收支類別 *</label>
+                  <select value={txForm.category} onChange={(e) => setTxForm(p => Object.assign({}, p, { category: e.target.value }))} className="w-full px-2.5 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-200 rounded-xl">
+                    {txForm.txType === 'expense' ? (
+                      <>
+                        <option value="餐飲伙食">餐飲伙食 ☕</option>
+                        <option value="住宅房租">住宅房租 🏠</option>
+                        <option value="交通移動">交通移動 🚄</option>
+                        <option value="娛樂生活">娛樂生活 🛍️</option>
+                        <option value="其他">其他 ❓</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="主業薪資">主業薪資 💼</option>
+                        <option value="副業滾存">副業滾存 🛍️</option>
+                        <option value="其他">其他 ❓</option>
+                      </>
+                    )}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-400 block mb-1">金額 ($) *</label>
+                  <input type="number" required value={txForm.amount} onChange={(e) => setTxForm(p => Object.assign({}, p, { amount: e.target.value }))} className="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-100 rounded-xl" />
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-zinc-400 block mb-1">備註說明</label>
+                <input type="text" value={txForm.desc} onChange={(e) => setTxForm(p => Object.assign({}, p, { desc: e.target.value }))} className="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-100 rounded-xl" placeholder="如：好市多日常採買" />
+              </div>
+              <button type="submit" className="w-full py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-extrabold text-xs rounded-xl shadow-lg active-press mt-2">寫入帳本</button>
+            </form>
+          );
+
+        case 'addStock':
+          return (
+            <form onSubmit={(e) => onSubmit(e, stockForm)} className="space-y-3.5">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-400 block mb-1">持股持有人 *</label>
+                  <select value={stockForm.owner} onChange={(e) => setStockForm(p => Object.assign({}, p, { owner: e.target.value }))} className="w-full px-2.5 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-200 rounded-xl">
+                    <option value="Chu">Chu 🦦 (夫)</option>
+                    <option value="Bu">Bu 🐟 (妻)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-400 block mb-1">股票代號 *</label>
+                  <input type="text" required value={stockForm.symbol} onChange={(e) => setStockForm(p => Object.assign({}, p, { symbol: e.target.value }))} className="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-100 rounded-xl" placeholder="2330 / TSLA" />
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-zinc-400 block mb-1">證券名稱 / 簡稱</label>
+                <input type="text" value={stockForm.name} onChange={(e) => setStockForm(p => Object.assign({}, p, { name: e.target.value }))} className="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-100 rounded-xl" placeholder="例如：台積電 (選填)" />
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="text-[9px] font-bold text-zinc-400 block mb-1">股數 *</label>
+                  <input type="number" required value={stockForm.shares} onChange={(e) => setStockForm(p => Object.assign({}, p, { shares: e.target.value }))} className="w-full px-2.5 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-100 rounded-xl" />
+                </div>
+                <div>
+                  <label className="text-[9px] font-bold text-zinc-400 block mb-1">平均成本 *</label>
+                  <input type="number" step="any" required value={stockForm.avgCost} onChange={(e) => setStockForm(p => Object.assign({}, p, { avgCost: e.target.value }))} className="w-full px-2.5 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-100 rounded-xl" />
+                </div>
+                <div>
+                  <label className="text-[9px] font-bold text-zinc-400 block mb-1">當前現價</label>
+                  <input type="number" step="any" value={stockForm.currentPrice} onChange={(e) => setStockForm(p => Object.assign({}, p, { currentPrice: e.target.value }))} className="w-full px-2.5 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-100 rounded-xl" placeholder="預設同成本" />
+                </div>
+              </div>
+              <button type="submit" className="w-full py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-extrabold text-xs rounded-xl shadow-lg active-press mt-2">加入證券清單</button>
+            </form>
+          );
+
+        case 'excelImport':
+          return (
+            <div className="space-y-4">
+              <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded-xl text-[11px] leading-relaxed text-purple-300">
+                <span className="font-extrabold block text-xs mb-1">💡 智慧型 Excel 複製貼上法：</span>
+                選取您的試算表儲存格，直接複製並貼在下方！<br />
+                1. 支援<b>月度收支總表</b> (如您截圖所示，包含 Jan, Feb...)<br />
+                2. 支援<b>流水明細帳</b> (欄位格式為: 日期、類型、金額、分類、備註)
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-400 block mb-1">對齊資料年份</label>
+                  <select 
+                    value={importYear} 
+                    onChange={(e) => setImportYear(e.target.value)}
+                    className="w-full px-2.5 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-200 rounded-xl outline-none"
+                  >
+                    <option value="2026">2026 年</option>
+                    <option value="2025">2025 年</option>
+                    <option value="2024">2024 年</option>
+                    <option value="2023">2023 年</option>
+                  </select>
+                </div>
+                
+                <button 
+                  onClick={handleParseExcel}
+                  disabled={!excelText.trim()}
+                  className="mt-5 py-2 bg-zinc-800 border border-zinc-700 text-zinc-200 font-extrabold text-xs rounded-xl hover:border-purple-500 active:scale-95 disabled:opacity-50 transition-all"
+                >
+                  🚀 解析 Excel 剪貼簿
+                </button>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-zinc-400 block mb-1">貼上 Excel / 試算表內容 *</label>
+                <textarea 
+                  rows="6"
+                  value={excelText}
+                  onChange={(e) => {
+                    setExcelText(e.target.value);
+                    setParsedPreview([]);
+                  }}
+                  className="w-full p-3 bg-zinc-950 border border-zinc-800 text-[10px] font-mono text-zinc-300 rounded-xl focus:border-purple-500 outline-none no-scrollbar"
+                  placeholder="請直接在此處 [Ctrl+V] 貼上 Excel 資料..."
+                />
+              </div>
+
+              {parsedPreview.length > 0 && (
+                <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-xl space-y-2 animate-fadeIn">
+                  <p className="text-[11px] font-black text-green-400">
+                    📋 解析完成！辨識出 {parsedPreview.length} 筆月度記帳明細！
+                  </p>
+                  
+                  <div className="max-h-[120px] overflow-y-auto no-scrollbar border-t border-green-500/10 pt-2 space-y-1">
+                    {parsedPreview.slice(0, 5).map((p, idx) => (
+                      <div key={idx} className="flex justify-between text-[9px] text-zinc-400">
+                        <span>{p.date} • {p.desc.split(' (')[0]} ({p.owner})</span>
+                        <span className={p.type === 'income' ? 'text-green-400' : 'text-zinc-200'}>
+                          {p.type === 'income' ? '+' : '-'}${p.amount.toLocaleString()}
+                        </span>
+                      </div>
+                    ))}
+                    {parsedPreview.length > 5 && (
+                      <p className="text-[8px] text-zinc-500 text-center font-bold">... 以及其他 {parsedPreview.length - 5} 筆項目 ...</p>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      onExcelImport(parsedPreview);
+                      setExcelText('');
+                      setParsedPreview([]);
+                    }}
+                    className="w-full py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-extrabold text-xs rounded-xl shadow-lg active-press mt-1.5"
+                  >
+                    確認合併並寫入資料庫 ⚡
+                  </button>
+                </div>
+              )}
+
+            </div>
+          );
+
+        default:
+          return null;
+      }
+    }
+
+    // Mount application
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
