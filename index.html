@@ -585,6 +585,18 @@
         });
       };
 
+      const handleClearOrders = () => {
+        setOrders([]);
+        showToast('🧹 已成功清空「好物推推」所有模擬訂單！', 'info');
+        setSheet({ isOpen: false, type: '', data: null });
+      };
+
+      const handleClearTransactions = () => {
+        setTransactions([]);
+        showToast('🧹 已成功清空所有日常收支流水明細！', 'info');
+        setSheet({ isOpen: false, type: '', data: null });
+      };
+
       // Excel 數據寫入合併
       const handleExcelImport = (importedList) => {
         if (importedList.length === 0) {
@@ -1117,6 +1129,8 @@
                     getFuzzyPriceMatches={getFuzzyPriceMatches} 
                     onExcelImport={handleExcelImport}
                     onAccountDelete={handleAccountDelete}
+                    onClearOrders={handleClearOrders}
+                    onClearTransactions={handleClearTransactions}
                     onSettingsImport={(payload) => {
                       setAccounts(payload.accounts);
                       setStocks(payload.stocks);
@@ -1141,7 +1155,7 @@
     }
 
     // Bottom Sheet Form routing
-    function BottomSheetForm({ sheet, onSubmit, getFuzzyPriceMatches, onExcelImport, onSettingsImport, onAccountDelete }) {
+    function BottomSheetForm({ sheet, onSubmit, getFuzzyPriceMatches, onExcelImport, onSettingsImport, onAccountDelete, onClearOrders, onClearTransactions }) {
       const { type, data } = sheet;
 
       const [balance, setBalance] = useState(data ? data.balance : '');
@@ -1576,6 +1590,105 @@
                 </div>
               )}
 
+            </div>
+          );
+
+        case 'settings':
+          return (
+            <div className="space-y-4 text-left font-sans">
+              <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded-xl text-[11px] leading-relaxed text-purple-300">
+                <span className="font-extrabold block text-xs mb-1">📱 跨裝置資料同步說明：</span>
+                CoFi 是極速、隱私的離線優先 App，所有資料皆安全地儲存在本機瀏覽器。若要在桌電與手機之間同步，您可以透過以下備份代碼進行：
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-zinc-400 block">步驟一：在此裝置「匯出」最新資料包</label>
+                <div className="relative">
+                  <textarea 
+                    readOnly 
+                    rows="3" 
+                    value={getExportCode()} 
+                    onClick={(e) => e.target.select()}
+                    className="w-full p-2.5 bg-zinc-950 border border-zinc-800 text-[9px] font-mono text-zinc-400 rounded-xl outline-none select-all no-scrollbar"
+                  />
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(getExportCode());
+                      setCopiedSync(true);
+                      setTimeout(() => setCopiedSync(false), 2000);
+                    }}
+                    className="absolute right-2 bottom-2 py-1 px-2.5 bg-purple-600 text-white font-extrabold text-[9px] rounded-lg shadow active-press hover:bg-purple-500"
+                  >
+                    {copiedSync ? '✅ 已複製代碼' : '📋 複製同步代碼'}
+                  </button>
+                </div>
+                <p className="text-[8px] text-zinc-500 font-medium">💡 點選複製後，可透過 LINE、Email 等傳送到另一台裝置貼上！</p>
+              </div>
+
+              <div className="border-t border-zinc-800/80 my-4" />
+
+              <form onSubmit={(e) => {
+                e.preventDefault();
+                if (!importCode.trim()) return;
+                try {
+                  const decoded = decodeURIComponent(escape(atob(importCode.trim())));
+                  const payload = JSON.parse(decoded);
+                  if (payload.accounts && payload.transactions) {
+                    onSettingsImport(payload);
+                  } else {
+                    alert('⚠️ 資料包格式錯誤：非合法的 CoFi 備份格式！');
+                  }
+                } catch (err) {
+                  alert('⚠️ 解析錯誤：同步代碼不完整或已被截斷，請重新複製！');
+                }
+              }} className="space-y-2">
+                <label className="text-[10px] font-bold text-zinc-400 block">步驟二：在另一台裝置貼上代碼「導入還原」</label>
+                <textarea 
+                  required
+                  rows="3" 
+                  value={importCode} 
+                  onChange={(e) => setImportCode(e.target.value)}
+                  placeholder="請在此貼上來自另一台裝置的同步代碼..."
+                  className="w-full p-2.5 bg-zinc-950 border border-zinc-800 text-[9px] font-mono text-zinc-300 rounded-xl focus:border-purple-500 outline-none no-scrollbar"
+                />
+                <button 
+                  type="submit" 
+                  className="w-full py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-extrabold text-xs rounded-xl shadow-lg active-press mt-1"
+                >
+                  🔄 立即導入並覆蓋此裝置資料
+                </button>
+              </form>
+
+              <div className="border-t border-zinc-800/80 my-4" />
+
+              <div className="space-y-2.5 text-left">
+                <label className="text-[10px] font-bold text-zinc-400 block">步驟三：資料庫維護與清空（正式啟用前準備）</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      if (confirm('確定要清空「好物推推」底下的所有模擬訂單嗎？此動作將清除所有訂單紀錄以利您正式錄入。')) {
+                        onClearOrders();
+                      }
+                    }}
+                    className="py-2 bg-red-950/30 border border-red-500/30 text-red-400 font-extrabold text-[10px] rounded-xl hover:bg-red-900/30 active-press"
+                  >
+                    🗑️ 清空好物推推訂單
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      if (confirm('確定要清空「收支流水帳」中的所有交易明細嗎？這將會清除您所有的歷史流水記帳明細。')) {
+                        onClearTransactions();
+                      }
+                    }}
+                    className="py-2 bg-red-950/30 border border-red-500/30 text-red-400 font-extrabold text-[10px] rounded-xl hover:bg-red-900/30 active-press"
+                  >
+                    🗑️ 清空歷史流水收支
+                  </button>
+                </div>
+              </div>
             </div>
           );
 
