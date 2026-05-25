@@ -387,6 +387,7 @@
 
       // UI 狀態
       const [toasts, setToasts] = useState([]);
+      const [isUpdatingStock, setIsUpdatingStock] = useState(false);
       const [selectedBatchId, setSelectedBatchId] = useState(() => {
         const active = INITIAL_BATCHES.find(b => b.active);
         return active ? active.id : INITIAL_BATCHES[0].id;
