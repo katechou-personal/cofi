@@ -247,13 +247,22 @@
     }
 
     // ==========================================
-    // 預設精緻模擬資料
+    // ==========================================
+    // 0. 全域多幣別常數與預設匯率
+    // ==========================================
+    const DEFAULT_RATES = { TWD: 1.0, USD: 32.5, VND: 0.00133 };
+    const CURRENCY_SYMBOLS = { TWD: 'NT$', USD: 'US$', VND: '₫' };
+    const CURRENCY_NAMES = { TWD: '台幣 (TWD)', USD: '美金 (USD)', VND: '越南盾 (VND)' };
+
+    // ==========================================
+    // 1. 預設帳戶與證券資料
     // ==========================================
     const INITIAL_ACCOUNTS = [
-      { id: 'a1', name: '台新 Richart', balance: 128500, owner: 'Bu' },
-      { id: 'a2', name: '富邦銀行', balance: 254000, owner: 'Bu' },
-      { id: 'a3', name: '中國信託', balance: 342000, owner: 'Chu' },
-      { id: 'a4', name: '國泰世華', balance: 512000, owner: 'Chu' }
+      { id: 'a1', name: '台新 Richart', balance: 128500, owner: 'Bu', currency: 'TWD' },
+      { id: 'a2', name: '富邦銀行', balance: 254000, owner: 'Bu', currency: 'TWD' },
+      { id: 'a3', name: '中國信託', balance: 342000, owner: 'Chu', currency: 'TWD' },
+      { id: 'a4', name: '國泰世華', balance: 512000, owner: 'Chu', currency: 'TWD' },
+      { id: 'a5', name: '美金外幣帳戶', balance: 3500, owner: '共同', currency: 'USD' }
     ];
 
     const INITIAL_STOCKS = [
@@ -269,12 +278,11 @@
     ];
 
     const INITIAL_ORDERS = [
-      { id: 'o1', date: '2026-05-20', client: '陳美玲', channel: 'Google表單', item: '綜合堅果特大包', cost: 300, price: 490, profit: 190, status: '已出貨', batchId: 'b1' },
-      { id: 'o2', date: '2026-05-22', client: '林志豪', channel: 'IG手動', item: '頂級野生開心果', cost: 220, price: 390, profit: 170, status: '已買項目', batchId: 'b1' },
-      { id: 'o3', date: '2026-05-23', client: '張雅婷', channel: 'Google表單', item: '無鹽烘焙腰果', cost: 200, price: 350, profit: 150, status: '待買項目', batchId: 'b1' },
-      { id: 'o4', date: '2026-04-12', client: '王思涵', channel: 'IG手動', item: '法式風衣外套 - 桃粉', cost: 1200, price: 2180, profit: 980, status: '已出貨', batchId: 'b2' },
-      { id: 'o5', date: '2026-04-15', client: '李佳蓉', channel: 'IG手動', item: '日系針織罩衫 - 米白', cost: 850, price: 1480, profit: 630, status: '已出貨', batchId: 'b2' },
-      { id: 'o6', date: '2026-05-24', client: '謝宇軒', channel: 'Google表單', item: '綜合堅果特大包', cost: 300, price: 490, profit: 190, status: '待買項目', batchId: 'b1' }
+      { id: 'o1', date: '2026-05-20', client: '陳美玲', channel: 'Google表單', item: '綜合堅果特大包', unitCost: 300, unitPrice: 490, quantity: 2, costCurrency: 'TWD', priceCurrency: 'TWD', cost: 600, price: 980, profit: 380, status: '已出貨', batchId: 'b1' },
+      { id: 'o2', date: '2026-05-22', client: '林志豪', channel: 'IG手動', item: '頂級野生開心果', unitCost: 150000, unitPrice: 390, quantity: 1, costCurrency: 'VND', priceCurrency: 'TWD', cost: 150000, price: 390, profit: 190, status: '已買項目', batchId: 'b1' },
+      { id: 'o3', date: '2026-05-23', client: '張雅婷', channel: 'Google表單', item: '無鹽烘焙腰果', unitCost: 200, unitPrice: 350, quantity: 3, costCurrency: 'TWD', priceCurrency: 'TWD', cost: 600, price: 1050, profit: 450, status: '待買項目', batchId: 'b1' },
+      { id: 'o4', date: '2026-04-12', client: '王思涵', channel: 'IG手動', item: '法式風衣外套 - 桃粉', unitCost: 25, unitPrice: 2180, quantity: 1, costCurrency: 'USD', priceCurrency: 'TWD', cost: 25, price: 2180, profit: 1367.5, status: '已出貨', batchId: 'b2' },
+      { id: 'o5', date: '2026-04-15', client: '李佳蓉', channel: 'IG手動', item: '日系針織罩衫 - 米白', unitCost: 850, unitPrice: 1480, quantity: 1, costCurrency: 'TWD', priceCurrency: 'TWD', cost: 850, price: 1480, profit: 630, status: '已出貨', batchId: 'b2' }
     ];
 
     // 2026年 01月-03月 您的真實花費預載入
@@ -336,6 +344,36 @@
       // 核心狀態 (try-catch)
       const [activeTab, setActiveTab] = useState('dashboard');
       
+      const [exchangeRates, setExchangeRates] = useState(() => {
+        try {
+          const local = localStorage.getItem('cofi_rates');
+          return local ? JSON.parse(local) : DEFAULT_RATES;
+        } catch(e) {
+          return DEFAULT_RATES;
+        }
+      });
+
+      useEffect(() => {
+        fetch('https://open.er-api.com/v6/latest/TWD')
+          .then(res => res.json())
+          .then(data => {
+            if (data && data.rates) {
+              const usdRate = data.rates.USD;
+              const vndRate = data.rates.VND;
+              const newRates = {
+                TWD: 1.0,
+                USD: usdRate ? Math.round((1 / usdRate) * 100) / 100 : 32.5,
+                VND: vndRate ? Math.round((1 / vndRate) * 100000) / 100000 : 0.00133
+              };
+              setExchangeRates(newRates);
+              localStorage.setItem('cofi_rates', JSON.stringify(newRates));
+            }
+          })
+          .catch(err => {
+            console.warn("Using cached/fallback exchange rates (offline-safe):", err);
+          });
+      }, []);
+
       const [accounts, setAccounts] = useState(() => {
         try {
           const local = localStorage.getItem('cofi_accounts');
@@ -422,11 +460,13 @@
       const cashTotals = useMemo(() => {
         let bu = 0, chu = 0;
         accounts.forEach(a => {
-          if (a.owner === 'Bu') bu += a.balance;
-          if (a.owner === 'Chu') chu += a.balance;
+          const rate = exchangeRates[a.currency || 'TWD'] || 1.0;
+          const balanceInTWD = a.balance * rate;
+          if (a.owner === 'Bu') bu += balanceInTWD;
+          if (a.owner === 'Chu') chu += balanceInTWD;
         });
         return { bu, chu, total: bu + chu };
-      }, [accounts]);
+      }, [accounts, exchangeRates]);
 
       const stockTotals = useMemo(() => {
         let bu = 0, chu = 0, totalCost = 0, totalValue = 0;
@@ -444,24 +484,53 @@
 
       const sideHustleStats = useMemo(() => {
         const activeOrders = orders.filter(o => o.batchId === selectedBatchId);
-        const activeCost = activeOrders.reduce((sum, o) => sum + o.cost, 0);
-        const activeSales = activeOrders.reduce((sum, o) => sum + o.price, 0);
-        const activeProfit = activeOrders.reduce((sum, o) => sum + o.profit, 0);
+        
+        let activeCost = 0;
+        let activeSales = 0;
+        let activeProfit = 0;
+
+        activeOrders.forEach(o => {
+          const q = o.quantity || 1;
+          const uCost = o.unitCost || o.cost;
+          const uPrice = o.unitPrice || o.price;
+          const costRate = exchangeRates[o.costCurrency || 'TWD'] || 1.0;
+          const priceRate = exchangeRates[o.priceCurrency || 'TWD'] || 1.0;
+
+          activeCost += uCost * q * costRate;
+          activeSales += uPrice * q * priceRate;
+          activeProfit += (uPrice * priceRate - uCost * costRate) * q;
+        });
 
         const thisMonthOrders = orders.filter(o => o.date.indexOf('2026-05') === 0);
+        const thisMonthSideHustleProfit = thisMonthOrders.reduce((sum, o) => {
+          const q = o.quantity || 1;
+          const uCost = o.unitCost || o.cost;
+          const uPrice = o.unitPrice || o.price;
+          const costRate = exchangeRates[o.costCurrency || 'TWD'] || 1.0;
+          const priceRate = exchangeRates[o.priceCurrency || 'TWD'] || 1.0;
+          const orderProfitTWD = (uPrice * priceRate - uCost * costRate) * q;
+          return sum + orderProfitTWD;
+        }, 0);
+
         return {
           activeCost, activeSales, activeProfit,
-          thisMonthSideHustleProfit: thisMonthOrders.reduce((sum, o) => sum + o.profit, 0),
+          thisMonthSideHustleProfit,
           orderCount: activeOrders.length
         };
-      }, [orders, selectedBatchId]);
+      }, [orders, selectedBatchId, exchangeRates]);
 
       const cashflowStats = useMemo(() => {
         const thisMonthTx = transactions.filter(t => t.date.indexOf('2026-05') === 0);
-        const income = thisMonthTx.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
-        const expense = thisMonthTx.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+        const income = thisMonthTx.filter(t => t.type === 'income').reduce((sum, t) => {
+          const rate = exchangeRates[t.currency || 'TWD'] || 1.0;
+          return sum + (t.amount * rate);
+        }, 0);
+        const expense = thisMonthTx.filter(t => t.type === 'expense').reduce((sum, t) => {
+          const rate = exchangeRates[t.currency || 'TWD'] || 1.0;
+          return sum + (t.amount * rate);
+        }, 0);
         return { income, expense, net: income - expense };
-      }, [transactions]);
+      }, [transactions, exchangeRates]);
 
       const familyTotalAssets = cashTotals.total + stockTotals.total + sideHustleStats.activeProfit;
       const familyMonthProfit = cashflowStats.net + sideHustleStats.thisMonthSideHustleProfit;
@@ -499,21 +568,41 @@
         const randomGood = SIMULATED_GOODS[Math.floor(Math.random() * SIMULATED_GOODS.length)];
         const randomClient = SIMULATED_CLIENTS[Math.floor(Math.random() * SIMULATED_CLIENTS.length)];
         const quantity = Math.floor(Math.random() * 3) + 1;
-        const cost = randomGood.cost * quantity;
-        const price = randomGood.price * quantity;
+        
+        // 智慧隨機：如果是堅果/開心果，進貨價在越南買所以是越南盾 (VND)，售價是台幣 (TWD)
+        const isVndCost = randomGood.item.indexOf('開心果') !== -1 || randomGood.item.indexOf('腰果') !== -1 || Math.random() > 0.5;
+        const costCurrency = isVndCost ? 'VND' : 'TWD';
+        const priceCurrency = 'TWD';
+        
+        // 越南盾金額大概是台幣進價的 750 倍，取個整數
+        const unitCost = isVndCost ? Math.round((randomGood.cost * 750) / 1000) * 1000 : randomGood.cost;
+        const unitPrice = randomGood.price;
+        
+        const costRate = exchangeRates[costCurrency] || 1.0;
+        const priceRate = exchangeRates[priceCurrency] || 1.0;
+        
+        const costTWD = unitCost * quantity * costRate;
+        const priceTWD = unitPrice * quantity * priceRate;
         
         const newOrder = {
           id: 'o_g_' + Date.now(),
           date: new Date().toISOString().split('T')[0],
           client: randomClient,
           channel: 'Google表單',
-          item: randomGood.item + " x " + quantity,
-          cost, price, profit: price - cost,
+          item: randomGood.item,
+          unitCost,
+          unitPrice,
+          quantity,
+          costCurrency,
+          priceCurrency,
+          cost: unitCost * quantity,
+          price: unitPrice * quantity,
+          profit: priceTWD - costTWD,
           status: '待買項目',
           batchId: selectedBatchId
         };
         setOrders(prev => [newOrder, ...prev]);
-        showToast("📥 堅果表單自動匯入成功！" + randomClient + " 訂購了 " + randomGood.item, 'success');
+        showToast("📥 堅果表單自動匯入成功！" + randomClient + " 訂購了 " + randomGood.item + " x " + quantity + " 件", 'success');
       };
 
       const triggerStockPriceUpdate = () => {
@@ -536,12 +625,15 @@
           const cleanItem = o.item.split(' x ')[0];
           if (cleanItem.toLowerCase().indexOf(query.toLowerCase()) !== -1 && !seen.has(cleanItem)) {
             seen.add(cleanItem);
-            const qtyMatch = o.item.match(/x\s*(\d+)/);
-            const qty = qtyMatch ? parseInt(qtyMatch[1], 10) : 1;
+            const qty = o.quantity || 1;
+            const uCost = o.unitCost || Math.round(o.cost / qty);
+            const uPrice = o.unitPrice || Math.round(o.price / qty);
             matched.push({
               item: cleanItem,
-              unitCost: Math.round(o.cost / qty),
-              unitPrice: Math.round(o.price / qty)
+              unitCost: uCost,
+              unitPrice: uPrice,
+              costCurrency: o.costCurrency || 'VND',
+              priceCurrency: o.priceCurrency || 'TWD'
             });
           }
         });
@@ -613,7 +705,7 @@
 
         if (type === 'reconcile') {
           const bal = parseFloat(formData.balance);
-          setAccounts(prev => prev.map(a => a.id === data.id ? Object.assign({}, a, { name: formData.name, owner: formData.owner, balance: bal }) : a));
+          setAccounts(prev => prev.map(a => a.id === data.id ? Object.assign({}, a, { name: formData.name, owner: formData.owner, balance: bal, currency: formData.currency }) : a));
           showToast("帳戶資料與餘額已校準！", 'success');
         } else if (type === 'addAccount') {
           const bal = parseFloat(formData.balance) || 0;
@@ -621,20 +713,35 @@
             id: 'a_' + Date.now(),
             name: formData.name,
             balance: bal,
-            owner: formData.owner
+            owner: formData.owner,
+            currency: formData.currency || 'TWD'
           };
           setAccounts(prev => [...prev, newAcc]);
           showToast("🏦 實體帳戶「" + formData.name + "」已成功加入！", 'success');
         } else if (type === 'addOrder') {
-          const cost = parseFloat(formData.cost) || 0;
-          const price = parseFloat(formData.price) || 0;
+          const uCost = parseFloat(formData.unitCost) || 0;
+          const uPrice = parseFloat(formData.unitPrice) || 0;
+          const q = parseInt(formData.quantity, 10) || 1;
+          const costCurr = formData.costCurrency || 'VND';
+          const priceCurr = formData.priceCurrency || 'TWD';
+          
+          const costRate = exchangeRates[costCurr] || 1.0;
+          const priceRate = exchangeRates[priceCurr] || 1.0;
+          
           const newOrder = {
             id: 'o_m_' + Date.now(),
             date: formData.date || new Date().toISOString().split('T')[0],
             client: formData.client || '手動IG買家',
             channel: 'IG手動',
             item: formData.item,
-            cost, price, profit: price - cost,
+            unitCost: uCost,
+            unitPrice: uPrice,
+            quantity: q,
+            costCurrency: costCurr,
+            priceCurrency: priceCurr,
+            cost: uCost * q,
+            price: uPrice * q,
+            profit: (uPrice * priceRate - uCost * costRate) * q,
             status: '待買項目',
             batchId: selectedBatchId
           };
@@ -647,6 +754,7 @@
             date: formData.date || new Date().toISOString().split('T')[0],
             type: formData.txType,
             amount: amt,
+            currency: formData.currency || 'TWD',
             category: formData.category,
             owner: formData.owner,
             desc: formData.desc || ''
@@ -855,16 +963,16 @@
                   <div className="premium-card rounded-2xl p-4 border-purple-500/20">
                     <div className="grid grid-cols-3 text-center gap-2">
                       <div>
-                        <p className="text-[9px] font-bold text-zinc-500">本檔總成本</p>
-                        <p className="text-sm font-extrabold text-zinc-300 mt-1">${sideHustleStats.activeCost.toLocaleString()}</p>
+                        <p className="text-[9px] font-bold text-zinc-500">本檔總成本 (等值台幣)</p>
+                        <p className="text-sm font-extrabold text-zinc-300 mt-1">${Math.round(sideHustleStats.activeCost).toLocaleString()}</p>
                       </div>
                       <div className="border-x border-zinc-800/80">
-                        <p className="text-[9px] font-bold text-zinc-500">本檔營業額</p>
-                        <p className="text-sm font-extrabold text-zinc-300 mt-1">${sideHustleStats.activeSales.toLocaleString()}</p>
+                        <p className="text-[9px] font-bold text-zinc-500">本檔營業額 (等值台幣)</p>
+                        <p className="text-sm font-extrabold text-zinc-300 mt-1">${Math.round(sideHustleStats.activeSales).toLocaleString()}</p>
                       </div>
                       <div>
-                        <p className="text-[9px] font-bold text-purple-400">本檔毛利潤</p>
-                        <p className="text-base font-black text-purple-400 mt-1.5">+${sideHustleStats.activeProfit.toLocaleString()}</p>
+                        <p className="text-[9px] font-bold text-purple-400">本檔毛利潤 (台幣計價)</p>
+                        <p className="text-base font-black text-purple-400 mt-1.5">+${Math.round(sideHustleStats.activeProfit).toLocaleString()}</p>
                       </div>
                     </div>
                   </div>
@@ -885,30 +993,63 @@
                       ))}
                     </div>
 
+                    {/* 品項出貨盤點面板 */}
+                    <PackingListPanel orders={orders.filter(o => o.batchId === selectedBatchId)} />
+
                     <div className="space-y-2">
-                      {orders.filter(o => o.batchId === selectedBatchId && (orderFilter === '全部' || o.status === orderFilter)).map(order => (
-                        <div key={order.id} className="premium-card rounded-xl p-3.5 flex items-center justify-between border-zinc-800/80">
-                          <div className="space-y-1.5 flex-1 pr-3">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="font-extrabold text-xs text-zinc-200">{order.client}</span>
-                              <span className={`px-1.5 py-0.5 rounded text-[8px] font-extrabold ${order.channel === 'Google表單' ? 'bg-green-500/10 text-green-400' : 'bg-pink-500/10 text-pink-400'}`}>{order.channel}</span>
-                              <span className="text-[9px] text-zinc-500">{order.date}</span>
+                      {orders.filter(o => o.batchId === selectedBatchId && (orderFilter === '全部' || o.status === orderFilter)).map(order => {
+                        const q = order.quantity || 1;
+                        const uCost = order.unitCost || order.cost;
+                        const uPrice = order.unitPrice || order.price;
+                        const costCurr = order.costCurrency || 'TWD';
+                        const priceCurr = order.priceCurrency || 'TWD';
+                        
+                        const costRate = exchangeRates[costCurr] || 1.0;
+                        const priceRate = exchangeRates[priceCurr] || 1.0;
+                        
+                        const orderCostTWD = uCost * q * costRate;
+                        const orderPriceTWD = uPrice * q * priceRate;
+                        const orderProfitTWD = orderPriceTWD - orderCostTWD;
+
+                        return (
+                          <div key={order.id} className="premium-card rounded-xl p-3.5 flex items-center justify-between border-zinc-800/80">
+                            <div className="space-y-1.5 flex-1 pr-3">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-extrabold text-xs text-zinc-200">{order.client}</span>
+                                <span className={`px-1.5 py-0.5 rounded text-[8px] font-extrabold ${order.channel === 'Google表單' ? 'bg-green-500/10 text-green-400' : 'bg-pink-500/10 text-pink-400'}`}>{order.channel}</span>
+                                <span className="text-[9px] text-zinc-500">{order.date}</span>
+                              </div>
+                              <p className="text-[11px] font-bold text-zinc-300 flex items-center gap-2">
+                                <span>{order.item}</span>
+                                <span className="px-1.5 py-0.2 bg-purple-500/10 text-purple-400 border border-purple-500/20 text-[8px] font-black rounded">
+                                  {q} 件
+                                </span>
+                              </p>
+                              <div className="flex flex-col gap-0.5">
+                                <div className="flex gap-3 text-[10px] text-zinc-400 flex-wrap">
+                                  <span>進價: {CURRENCY_SYMBOLS[costCurr]}{uCost.toLocaleString()} /件</span>
+                                  <span>售價: {CURRENCY_SYMBOLS[priceCurr]}{uPrice.toLocaleString()} /件</span>
+                                </div>
+                                <div className="text-[10px] text-purple-400 font-bold flex items-center gap-1 flex-wrap">
+                                  <span>台幣淨利: +${Math.round(orderProfitTWD).toLocaleString()}</span>
+                                  {(costCurr !== 'TWD' || priceCurr !== 'TWD') && (
+                                    <span className="text-[8px] text-zinc-500 font-normal">
+                                      (原幣總成本: {CURRENCY_SYMBOLS[costCurr]}{(uCost * q).toLocaleString()} | 總售價: {CURRENCY_SYMBOLS[priceCurr]}{(uPrice * q).toLocaleString()})
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
                             </div>
-                            <p className="text-[11px] font-bold text-zinc-300">{order.item}</p>
-                            <div className="flex gap-3 text-[10px] text-zinc-400">
-                              <span>進價: ${order.cost}</span>
-                              <span>售價: ${order.price}</span>
-                              <span className="text-purple-400 font-bold">淨利: ${order.profit}</span>
+                            <div className="flex flex-col items-end gap-2">
+                              <button onClick={() => toggleOrderStatus(order.id)} className={`px-2 py-1 rounded text-[9px] font-black flex items-center gap-1 ${order.status === '待買項目' ? 'bg-yellow-500/10 text-yellow-400' : order.status === '已買項目' ? 'bg-blue-500/10 text-blue-400' : 'bg-green-500/10 text-green-400'}`}>
+                                {order.status}
+                              </button>
+                              <button onClick={() => handleOrderDelete(order.id)} className="text-zinc-600 hover:text-red-400"><Icon name="Trash2" size={12} /></button>
                             </div>
                           </div>
-                          <div className="flex flex-col items-end gap-2">
-                            <button onClick={() => toggleOrderStatus(order.id)} className={`px-2 py-1 rounded text-[9px] font-black flex items-center gap-1 ${order.status === '待買項目' ? 'bg-yellow-500/10 text-yellow-400' : order.status === '已買項目' ? 'bg-blue-500/10 text-blue-400' : 'bg-green-500/10 text-green-400'}`}>
-                              {order.status}
-                            </button>
-                            <button onClick={() => handleOrderDelete(order.id)} className="text-zinc-600 hover:text-red-400"><Icon name="Trash2" size={12} /></button>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
+                    </div>
                     </div>
                   </div>
                 </div>
@@ -932,16 +1073,27 @@
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
-                      {accounts.map(acc => (
-                        <div key={acc.id} className={`premium-card rounded-xl p-3.5 flex flex-col justify-between relative overflow-hidden ${acc.owner === 'Bu' ? 'premium-card-pink' : 'premium-card-blue'}`}>
-                          <div className="flex justify-between items-center">
-                            <span className="text-xs font-extrabold text-zinc-200">{acc.name}</span>
-                            <span className="text-[8px] font-black">{acc.owner}</span>
+                      {accounts.map(acc => {
+                        const curr = acc.currency || 'TWD';
+                        const symbol = CURRENCY_SYMBOLS[curr] || '$';
+                        const rate = exchangeRates[curr] || 1.0;
+                        const balanceInTWD = acc.balance * rate;
+                        return (
+                          <div key={acc.id} className={`premium-card rounded-xl p-3.5 flex flex-col justify-between relative overflow-hidden ${acc.owner === 'Bu' ? 'premium-card-pink' : 'premium-card-blue'}`}>
+                            <div className="flex justify-between items-center">
+                              <span className="text-xs font-extrabold text-zinc-200">{acc.name}</span>
+                              <span className="text-[8px] font-black px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-400">{curr}</span>
+                            </div>
+                            <div className="mt-2">
+                              <p className="text-base font-black text-zinc-100">{symbol} {Math.round(acc.balance).toLocaleString()}</p>
+                              {curr !== 'TWD' && (
+                                <p className="text-[9px] text-zinc-500 font-bold mt-0.5">約 NT$ {Math.round(balanceInTWD).toLocaleString()}</p>
+                              )}
+                            </div>
+                            <button onClick={() => setSheet({ isOpen: true, type: 'reconcile', data: acc })} className="mt-3 py-1.5 w-full bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-300 font-bold rounded-lg flex items-center justify-center gap-1 active-press"><Icon name="RefreshCw" size={10} />對帳</button>
                           </div>
-                          <p className="text-base font-black text-zinc-100 mt-2">${Math.round(acc.balance).toLocaleString()}</p>
-                          <button onClick={() => setSheet({ isOpen: true, type: 'reconcile', data: acc })} className="mt-3 py-1.5 w-full bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-300 font-bold rounded-lg flex items-center justify-center gap-1 active-press"><Icon name="RefreshCw" size={10} />對帳</button>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -949,7 +1101,7 @@
                     <div className="flex justify-between items-center">
                       <div>
                         <h3 className="text-xs font-extrabold text-zinc-300 tracking-wider">📊 歷史收支流水帳簿</h3>
-                        <p className="text-[9px] text-zinc-500 mt-0.5">5月收支結餘: <span className={cashflowStats.net >= 0 ? 'text-emerald-400' : 'text-red-400'}>${cashflowStats.net.toLocaleString()}</span></p>
+                        <p className="text-[9px] text-zinc-500 mt-0.5">5月收支結餘 (台幣): <span className={cashflowStats.net >= 0 ? 'text-emerald-400' : 'text-red-400'}>${Math.round(cashflowStats.net).toLocaleString()}</span></p>
                       </div>
                       <div className="flex gap-2">
                         <button 
@@ -976,26 +1128,39 @@
                         if (cashflowFilter === 'Bu 🐟') return t.owner === 'Bu';
                         if (cashflowFilter === 'Chu 🦦') return t.owner === 'Chu';
                         return t.owner === '共同';
-                      }).map(tx => (
-                        <div key={tx.id} className="premium-card rounded-xl p-3 flex items-center justify-between border-zinc-800/80">
-                          <div className="flex items-center gap-3">
-                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm ${tx.type === 'income' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-zinc-800 text-zinc-400'}`}>
-                              {tx.category === '主業薪資' ? <Icon name="DollarSign" size={16} /> : tx.category === '餐飲伙食' ? <Icon name="Coffee" size={16} /> : tx.category === '住宅房租' ? <Icon name="Home" size={16} /> : tx.category === '交通移動' ? <Icon name="TrendingUp" size={16} /> : <Icon name="ShoppingBag" size={16} />}
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="font-extrabold text-xs text-zinc-200">{tx.category}</span>
-                                <span className={"text-[8px] font-extrabold px-1.5 py-0.2 rounded " + (tx.owner === 'Bu' ? 'bg-pink-500/10 text-pink-400' : tx.owner === 'Chu' ? 'bg-blue-500/10 text-blue-400' : 'bg-emerald-500/10 text-emerald-400')}>{tx.owner}</span>
+                      }).map(tx => {
+                        const curr = tx.currency || 'TWD';
+                        const rate = exchangeRates[curr] || 1.0;
+                        const amtInTWD = tx.amount * rate;
+                        const symbol = CURRENCY_SYMBOLS[curr] || '$';
+                        return (
+                          <div key={tx.id} className="premium-card rounded-xl p-3 flex items-center justify-between border-zinc-800/80">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm ${tx.type === 'income' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-zinc-800 text-zinc-400'}`}>
+                                {tx.category === '主業薪資' ? <Icon name="DollarSign" size={16} /> : tx.category === '餐飲伙食' ? <Icon name="Coffee" size={16} /> : tx.category === '住宅房租' ? <Icon name="Home" size={16} /> : tx.category === '交通移動' ? <Icon name="TrendingUp" size={16} /> : <Icon name="ShoppingBag" size={16} />}
                               </div>
-                              <p className="text-[10px] text-zinc-400 font-bold">{tx.desc} <span className="text-zinc-600">• {tx.date}</span></p>
+                              <div>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="font-extrabold text-xs text-zinc-200">{tx.category}</span>
+                                  <span className={"text-[8px] font-extrabold px-1.5 py-0.2 rounded " + (tx.owner === 'Bu' ? 'bg-pink-500/10 text-pink-400' : tx.owner === 'Chu' ? 'bg-blue-500/10 text-blue-400' : 'bg-emerald-500/10 text-emerald-400')}>{tx.owner}</span>
+                                </div>
+                                <p className="text-[10px] text-zinc-400 font-bold">{tx.desc} <span className="text-zinc-600">• {tx.date}</span></p>
+                              </div>
+                            </div>
+                            <div className="flex flex-col items-end gap-0.5">
+                              <div className="flex items-center gap-3">
+                                <span className={`text-xs font-black ${tx.type === 'income' ? 'text-emerald-400' : 'text-zinc-200'}`}>{tx.type === 'income' ? '+' : '-'}{symbol}{tx.amount.toLocaleString()}</span>
+                                <button onClick={() => handleTransactionDelete(tx.id)} className="text-zinc-600 hover:text-red-400"><Icon name="Trash2" size={12} /></button>
+                              </div>
+                              {curr !== 'TWD' && (
+                                <span className="text-[8.5px] text-zinc-500 font-bold">
+                                  約 NT$ {Math.round(amtInTWD).toLocaleString()}
+                                </span>
+                              )}
                             </div>
                           </div>
-                          <div className="flex items-center gap-3">
-                            <span className={`text-xs font-black ${tx.type === 'income' ? 'text-emerald-400' : 'text-zinc-200'}`}>{tx.type === 'income' ? '+' : '-'}${tx.amount.toLocaleString()}</span>
-                            <button onClick={() => handleTransactionDelete(tx.id)} className="text-zinc-600 hover:text-red-400"><Icon name="Trash2" size={12} /></button>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
@@ -1161,14 +1326,22 @@
       const [balance, setBalance] = useState(data ? data.balance : '');
       const [accName, setAccName] = useState(data ? data.name : '');
       const [accOwner, setAccOwner] = useState(data ? data.owner : '共同');
+      const [accCurrency, setAccCurrency] = useState(data ? data.currency : 'TWD');
 
       const [orderForm, setOrderForm] = useState({
-        client: '', date: new Date().toISOString().split('T')[0], item: '', cost: '', price: ''
+        client: '',
+        date: new Date().toISOString().split('T')[0],
+        item: '',
+        unitCost: '',
+        unitPrice: '',
+        quantity: '1',
+        costCurrency: 'VND', // 預設進貨是越南盾 (VND)
+        priceCurrency: 'TWD' // 預設售價是台幣 (TWD)
       });
       const [priceSuggestions, setPriceSuggestions] = useState([]);
 
       const [txForm, setTxForm] = useState({
-        txType: 'expense', amount: '', category: '餐飲伙食', owner: '共同', date: new Date().toISOString().split('T')[0], desc: ''
+        txType: 'expense', amount: '', currency: 'TWD', category: '餐飲伙食', owner: '共同', date: new Date().toISOString().split('T')[0], desc: ''
       });
 
       const [stockForm, setStockForm] = useState({
@@ -1306,14 +1479,20 @@
       };
 
       const applySuggestion = (sug) => {
-        setOrderForm(prev => Object.assign({}, prev, { item: sug.item, cost: sug.unitCost, price: sug.unitPrice }));
+        setOrderForm(prev => Object.assign({}, prev, { 
+          item: sug.item, 
+          unitCost: sug.unitCost, 
+          unitPrice: sug.unitPrice,
+          costCurrency: sug.costCurrency || 'VND',
+          priceCurrency: sug.priceCurrency || 'TWD'
+        }));
         setPriceSuggestions([]);
       };
 
       switch (type) {
         case 'reconcile':
           return (
-            <form onSubmit={(e) => onSubmit(e, { name: accName, owner: accOwner, balance })} className="space-y-4 text-left">
+            <form onSubmit={(e) => onSubmit(e, { name: accName, owner: accOwner, balance, currency: accCurrency })} className="space-y-4 text-left">
               <div>
                 <label className="text-[10px] font-bold text-zinc-400 block mb-1">帳戶名稱 *</label>
                 <input type="text" required value={accName} onChange={(e) => setAccName(e.target.value)} className="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-100 rounded-xl outline-none" placeholder="編輯帳戶名稱" />
@@ -1328,9 +1507,17 @@
                   </select>
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-zinc-400 block mb-1">年底網銀餘額 ($) *</label>
-                  <input type="number" required value={balance} onChange={(e) => setBalance(e.target.value)} className="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-100 rounded-xl outline-none" placeholder="網銀即時餘額" />
+                  <label className="text-[10px] font-bold text-zinc-400 block mb-1">對帳幣別 *</label>
+                  <select value={accCurrency} onChange={(e) => setAccCurrency(e.target.value)} className="w-full px-2.5 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-200 rounded-xl outline-none">
+                    <option value="TWD">台幣 (TWD)</option>
+                    <option value="USD">美金 (USD)</option>
+                    <option value="VND">越南盾 (VND)</option>
+                  </select>
                 </div>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-zinc-400 block mb-1">年底網銀餘額 ({CURRENCY_SYMBOLS[accCurrency] || '$'}) *</label>
+                <input type="number" required value={balance} onChange={(e) => setBalance(e.target.value)} className="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-100 rounded-xl outline-none" placeholder="網銀即時餘額" />
               </div>
               <div className="flex gap-2.5 pt-1">
                 <button 
@@ -1351,7 +1538,7 @@
 
         case 'addAccount':
           return (
-            <form onSubmit={(e) => onSubmit(e, { name: accName, owner: accOwner, balance })} className="space-y-3.5 text-left">
+            <form onSubmit={(e) => onSubmit(e, { name: accName, owner: accOwner, balance, currency: accCurrency })} className="space-y-3.5 text-left">
               <div>
                 <label className="text-[10px] font-bold text-zinc-400 block mb-1">帳戶名稱 *</label>
                 <input type="text" required value={accName} onChange={(e) => setAccName(e.target.value)} className="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-100 rounded-xl outline-none" placeholder="例如：國泰世華、郵局、現金袋" />
@@ -1366,9 +1553,17 @@
                   </select>
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-zinc-400 block mb-1">初始餘額 ($) *</label>
-                  <input type="number" required value={balance} onChange={(e) => setBalance(e.target.value)} className="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-100 rounded-xl outline-none" placeholder="輸入當前金額" />
+                  <label className="text-[10px] font-bold text-zinc-400 block mb-1">對帳幣別 *</label>
+                  <select value={accCurrency} onChange={(e) => setAccCurrency(e.target.value)} className="w-full px-2.5 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-200 rounded-xl outline-none">
+                    <option value="TWD">台幣 (TWD)</option>
+                    <option value="USD">美金 (USD)</option>
+                    <option value="VND">越南盾 (VND)</option>
+                  </select>
                 </div>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-zinc-400 block mb-1">初始餘額 ({CURRENCY_SYMBOLS[accCurrency] || '$'}) *</label>
+                <input type="number" required value={balance} onChange={(e) => setBalance(e.target.value)} className="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-100 rounded-xl outline-none" placeholder="輸入當前金額" />
               </div>
               <button type="submit" className="w-full py-2.5 bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-extrabold text-xs rounded-xl shadow-lg active-press mt-2">建立新帳戶</button>
             </form>
@@ -1387,31 +1582,68 @@
                   <input type="date" value={orderForm.date} onChange={(e) => setOrderForm(prev => Object.assign({}, prev, { date: e.target.value }))} className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 text-xs text-zinc-100 rounded-xl" />
                 </div>
               </div>
-              <div>
-                <label className="text-[10px] font-bold text-zinc-400 block mb-1">購買品項與名稱 *</label>
-                <input type="text" required value={orderForm.item} onChange={handleItemNameChange} className="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-100 rounded-xl outline-none" placeholder="輸入商品關鍵字匹配歷史價..." />
-                
-                {priceSuggestions.length > 0 && (
-                  <div className="mt-1.5 p-2 rounded-xl bg-purple-500/10 border border-purple-500/20 space-y-1">
-                    <p className="text-[9px] font-black text-purple-400">💡 歷史報價一鍵套用：</p>
-                    {priceSuggestions.map((sug, i) => (
-                      <button key={i} type="button" onClick={() => applySuggestion(sug)} className="w-full text-left py-1 px-1.5 rounded bg-zinc-900/60 border border-zinc-800 text-[10px] font-bold text-zinc-300 hover:border-purple-500 flex justify-between">
-                        <span>{sug.item}</span><span className="text-purple-400 font-extrabold">進 ${sug.unitCost} / 售 ${sug.unitPrice}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <label className="text-[10px] font-bold text-zinc-400 block mb-1">購買品項與名稱 *</label>
+                  <input type="text" required value={orderForm.item} onChange={handleItemNameChange} className="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-100 rounded-xl outline-none" placeholder="去皮腰果500g" />
+                  
+                  {priceSuggestions.length > 0 && (
+                    <div className="mt-1.5 p-2 rounded-xl bg-purple-500/10 border border-purple-500/20 space-y-1">
+                      <p className="text-[9px] font-black text-purple-400">💡 歷史報價一鍵套用：</p>
+                      {priceSuggestions.map((sug, i) => (
+                        <button key={i} type="button" onClick={() => applySuggestion(sug)} className="w-full text-left py-1 px-1.5 rounded bg-zinc-900/60 border border-zinc-800 text-[10px] font-bold text-zinc-300 hover:border-purple-500 flex justify-between">
+                          <span>{sug.item}</span><span className="text-purple-400 font-extrabold">進 {CURRENCY_SYMBOLS[sug.costCurrency || 'VND']}{sug.unitCost} / 售 {CURRENCY_SYMBOLS[sug.priceCurrency || 'TWD']}{sug.unitPrice}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
+              
+              <div className="grid grid-cols-3 gap-2">
+                <div className="col-span-1">
+                  <label className="text-[10px] font-bold text-zinc-400 block mb-1">購買數量 *</label>
+                  <input type="number" min="1" required value={orderForm.quantity} onChange={(e) => setOrderForm(prev => Object.assign({}, prev, { quantity: e.target.value }))} className="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-100 rounded-xl outline-none" />
+                </div>
+                <div className="col-span-1">
+                  <label className="text-[10px] font-bold text-zinc-400 block mb-1">進貨幣別 *</label>
+                  <select value={orderForm.costCurrency} onChange={(e) => setOrderForm(prev => Object.assign({}, prev, { costCurrency: e.target.value }))} className="w-full px-2 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-200 rounded-xl outline-none">
+                    <option value="VND">越南盾 (VND ₫)</option>
+                    <option value="TWD">台幣 (TWD NT$)</option>
+                    <option value="USD">美金 (USD US$)</option>
+                  </select>
+                </div>
+                <div className="col-span-1">
+                  <label className="text-[10px] font-bold text-zinc-400 block mb-1">售價幣別 *</label>
+                  <select value={orderForm.priceCurrency} onChange={(e) => setOrderForm(prev => Object.assign({}, prev, { priceCurrency: e.target.value }))} className="w-full px-2 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-200 rounded-xl outline-none">
+                    <option value="TWD">台幣 (TWD NT$)</option>
+                    <option value="VND">越南盾 (VND ₫)</option>
+                    <option value="USD">美金 (USD US$)</option>
+                  </select>
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[10px] font-bold text-zinc-400 block mb-1">進貨成本 / 件 *</label>
-                  <input type="number" required value={orderForm.cost} onChange={(e) => setOrderForm(prev => Object.assign({}, prev, { cost: e.target.value }))} className="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-100 rounded-xl outline-none" />
+                  <label className="text-[10px] font-bold text-zinc-400 block mb-1">單件成本 ({CURRENCY_SYMBOLS[orderForm.costCurrency || 'VND']}) *</label>
+                  <input type="number" step="any" required value={orderForm.unitCost} onChange={(e) => setOrderForm(prev => Object.assign({}, prev, { unitCost: e.target.value }))} className="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-100 rounded-xl outline-none" placeholder="0" />
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-zinc-400 block mb-1">代購售價 / 件 *</label>
-                  <input type="number" required value={orderForm.price} onChange={(e) => setOrderForm(prev => Object.assign({}, prev, { price: e.target.value }))} className="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-100 rounded-xl outline-none" />
+                  <label className="text-[10px] font-bold text-zinc-400 block mb-1">單件售價 ({CURRENCY_SYMBOLS[orderForm.priceCurrency || 'TWD']}) *</label>
+                  <input type="number" step="any" required value={orderForm.unitPrice} onChange={(e) => setOrderForm(prev => Object.assign({}, prev, { unitPrice: e.target.value }))} className="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-100 rounded-xl outline-none" placeholder="0" />
                 </div>
               </div>
+
+              {orderForm.quantity > 0 && orderForm.unitCost && orderForm.unitPrice && (
+                <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded-xl space-y-1 text-[11px] text-purple-300 font-bold">
+                  <p>📊 試算總額結果：</p>
+                  <div className="grid grid-cols-2 gap-2 text-[10px] text-zinc-400 font-semibold mt-1">
+                    <div>總進貨價: {CURRENCY_SYMBOLS[orderForm.costCurrency || 'VND']}{(parseFloat(orderForm.unitCost) * parseInt(orderForm.quantity, 10)).toLocaleString()}</div>
+                    <div>總代購售價: {CURRENCY_SYMBOLS[orderForm.priceCurrency || 'TWD']}{(parseFloat(orderForm.unitPrice) * parseInt(orderForm.quantity, 10)).toLocaleString()}</div>
+                  </div>
+                </div>
+              )}
+
               <button type="submit" className="w-full py-2.5 bg-gradient-to-r from-pink-500 to-purple-600 text-white font-extrabold text-xs rounded-xl shadow-lg active-press mt-2">登錄 IG 訂單</button>
             </form>
           );
@@ -1459,9 +1691,17 @@
                   </select>
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-zinc-400 block mb-1">金額 ($) *</label>
-                  <input type="number" required value={txForm.amount} onChange={(e) => setTxForm(p => Object.assign({}, p, { amount: e.target.value }))} className="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-100 rounded-xl" />
+                  <label className="text-[10px] font-bold text-zinc-400 block mb-1">收支幣別 *</label>
+                  <select value={txForm.currency} onChange={(e) => setTxForm(p => Object.assign({}, p, { currency: e.target.value }))} className="w-full px-2.5 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-200 rounded-xl">
+                    <option value="TWD">台幣 (TWD)</option>
+                    <option value="USD">美金 (USD)</option>
+                    <option value="VND">越南盾 (VND)</option>
+                  </select>
                 </div>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-zinc-400 block mb-1">金額 ({CURRENCY_SYMBOLS[txForm.currency || 'TWD']}) *</label>
+                <input type="number" required value={txForm.amount} onChange={(e) => setTxForm(p => Object.assign({}, p, { amount: e.target.value }))} className="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-100 rounded-xl" />
               </div>
               <div>
                 <label className="text-[10px] font-bold text-zinc-400 block mb-1">備註說明</label>
@@ -1695,6 +1935,64 @@
         default:
           return null;
       }
+    }
+
+    // ==========================================
+    // 8. 品項出貨盤點面板元件 (Surprise Premium Feature!)
+    // ==========================================
+    function PackingListPanel({ orders }) {
+      const [isOpen, setIsOpen] = useState(false);
+
+      const packingData = useMemo(() => {
+        const counts = {};
+        orders.forEach(o => {
+          const name = o.item || '未命名商品';
+          const q = o.quantity || 1;
+          if (!counts[name]) {
+            counts[name] = { total: 0, pending: 0, bought: 0, shipped: 0 };
+          }
+          counts[name].total += q;
+          if (o.status === '待買項目') counts[name].pending += q;
+          else if (o.status === '已買項目') counts[name].bought += q;
+          else if (o.status === '已出貨') counts[name].shipped += q;
+        });
+        return Object.entries(counts).map(([name, data]) => ({ name, ...data }));
+      }, [orders]);
+
+      if (packingData.length === 0) return null;
+
+      return (
+        <div className="premium-card rounded-xl p-3 border-purple-500/10 space-y-2">
+          <button 
+            type="button"
+            onClick={() => setIsOpen(!isOpen)}
+            className="w-full flex items-center justify-between text-xs font-black text-purple-300 active-press outline-none"
+          >
+            <span className="flex items-center gap-1.5">📦 本期出貨品項累計盤點 ({packingData.length} 種)</span>
+            <span className="text-[10px] bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20 text-purple-400">
+              {isOpen ? '收合' : '展開盤點'}
+            </span>
+          </button>
+
+          {isOpen && (
+            <div className="pt-2 border-t border-zinc-800/80 space-y-1.5 animate-fadeIn max-h-[180px] overflow-y-auto no-scrollbar">
+              {packingData.map((item, idx) => (
+                <div key={idx} className="flex flex-col gap-0.5 py-1 px-1.5 rounded bg-zinc-950/40 border border-zinc-900/60 text-[10px]">
+                  <div className="flex justify-between items-center font-bold">
+                    <span className="text-zinc-200">{item.name}</span>
+                    <span className="text-purple-400 font-extrabold">共 {item.total} 件</span>
+                  </div>
+                  <div className="flex gap-3 text-[9px] text-zinc-500 font-semibold">
+                    <span className={item.pending > 0 ? 'text-yellow-400/80 font-black' : ''}>待買: {item.pending}</span>
+                    <span className={item.bought > 0 ? 'text-blue-400/80 font-black' : ''}>已買: {item.bought}</span>
+                    <span className={item.shipped > 0 ? 'text-green-400/80 font-black' : ''}>已出貨: {item.shipped}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
     }
 
     // Mount application
