@@ -1,6 +1,31 @@
 <!DOCTYPE html>
 <html lang="zh-TW" class="dark">
 <head>
+  <script>
+    window.onerror = function(message, source, lineno, colno, error) {
+      var div = document.createElement('div');
+      div.id = 'runtime-error-overlay';
+      div.style.position = 'fixed';
+      div.style.top = '0';
+      div.style.left = '0';
+      div.style.width = '100%';
+      div.style.height = '100%';
+      div.style.backgroundColor = 'black';
+      div.style.color = 'red';
+      div.style.padding = '20px';
+      div.style.zIndex = '999999';
+      div.style.overflow = 'auto';
+      div.style.fontSize = '16px';
+      div.style.fontFamily = 'monospace';
+      div.innerHTML = '<h1>🚨 CoFi Runtime Error Detected!</h1>' +
+                      '<p><b>Error Message:</b> ' + message + '</p>' +
+                      '<p><b>Source File:</b> ' + source + '</p>' +
+                      '<p><b>Line Number:</b> ' + lineno + ' | <b>Column:</b> ' + colno + '</p>' +
+                      '<pre>' + (error && error.stack ? error.stack : 'No stack trace available') + '</pre>';
+      document.body.appendChild(div);
+      return false;
+    };
+  </script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>CoFi — Bu 🐟 ✕ Chu 🦦 家庭聯名帳本</title>
@@ -51,15 +76,15 @@
     }
   </script>
 
-  <!-- Lucide Icons CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/lucide@0.300.0/dist/umd/lucide.min.js"></script>
+  <!-- Lucide Icons CDN (Cloudflare) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/lucide/0.300.0/lucide.min.js"></script>
 
-  <!-- React & ReactDOM Production CDNs -->
-  <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+  <!-- React & ReactDOM Production CDNs (Cloudflare) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 
-  <!-- Babel Standalone CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.23.5/babel.min.js"></script>
+  <!-- Babel Standalone CDN (Cloudflare) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
 
   <style>
     body {
