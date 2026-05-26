@@ -347,7 +347,8 @@
       const [exchangeRates, setExchangeRates] = useState(() => {
         try {
           const local = localStorage.getItem('cofi_rates');
-          return local ? JSON.parse(local) : DEFAULT_RATES;
+          const parsed = local ? JSON.parse(local) : null;
+          return (parsed && typeof parsed === 'object' && parsed.TWD) ? parsed : DEFAULT_RATES;
         } catch(e) {
           return DEFAULT_RATES;
         }
@@ -377,7 +378,8 @@
       const [accounts, setAccounts] = useState(() => {
         try {
           const local = localStorage.getItem('cofi_accounts');
-          return local ? JSON.parse(local) : INITIAL_ACCOUNTS;
+          const parsed = local ? JSON.parse(local) : null;
+          return Array.isArray(parsed) ? parsed : INITIAL_ACCOUNTS;
         } catch(e) {
           return INITIAL_ACCOUNTS;
         }
@@ -386,7 +388,8 @@
       const [stocks, setStocks] = useState(() => {
         try {
           const local = localStorage.getItem('cofi_stocks');
-          return local ? JSON.parse(local) : INITIAL_STOCKS;
+          const parsed = local ? JSON.parse(local) : null;
+          return Array.isArray(parsed) ? parsed : INITIAL_STOCKS;
         } catch(e) {
           return INITIAL_STOCKS;
         }
@@ -395,7 +398,8 @@
       const [batches, setBatches] = useState(() => {
         try {
           const local = localStorage.getItem('cofi_batches');
-          return local ? JSON.parse(local) : INITIAL_BATCHES;
+          const parsed = local ? JSON.parse(local) : null;
+          return Array.isArray(parsed) ? parsed : INITIAL_BATCHES;
         } catch(e) {
           return INITIAL_BATCHES;
         }
@@ -404,7 +408,8 @@
       const [orders, setOrders] = useState(() => {
         try {
           const local = localStorage.getItem('cofi_orders');
-          return local ? JSON.parse(local) : INITIAL_ORDERS;
+          const parsed = local ? JSON.parse(local) : null;
+          return Array.isArray(parsed) ? parsed : INITIAL_ORDERS;
         } catch(e) {
           return INITIAL_ORDERS;
         }
@@ -413,11 +418,8 @@
       const [transactions, setTransactions] = useState(() => {
         try {
           const local = localStorage.getItem('cofi_transactions');
-          if (!local) {
-            localStorage.setItem('cofi_transactions', JSON.stringify(INITIAL_TRANSACTIONS));
-            return INITIAL_TRANSACTIONS;
-          }
-          return JSON.parse(local);
+          const parsed = local ? JSON.parse(local) : null;
+          return Array.isArray(parsed) ? parsed : INITIAL_TRANSACTIONS;
         } catch(e) {
           return INITIAL_TRANSACTIONS;
         }
@@ -501,7 +503,7 @@
           activeProfit += (uPrice * priceRate - uCost * costRate) * q;
         });
 
-        const thisMonthOrders = orders.filter(o => o.date.indexOf('2026-05') === 0);
+        const thisMonthOrders = (orders || []).filter(o => o && o.date && typeof o.date === 'string' && o.date.indexOf('2026-05') === 0);
         const thisMonthSideHustleProfit = thisMonthOrders.reduce((sum, o) => {
           const q = o.quantity || 1;
           const uCost = o.unitCost || o.cost;
@@ -520,7 +522,7 @@
       }, [orders, selectedBatchId, exchangeRates]);
 
       const cashflowStats = useMemo(() => {
-        const thisMonthTx = transactions.filter(t => t.date.indexOf('2026-05') === 0);
+        const thisMonthTx = (transactions || []).filter(t => t && t.date && typeof t.date === 'string' && t.date.indexOf('2026-05') === 0);
         const income = thisMonthTx.filter(t => t.type === 'income').reduce((sum, t) => {
           const rate = exchangeRates[t.currency || 'TWD'] || 1.0;
           return sum + (t.amount * rate);
