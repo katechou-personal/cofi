@@ -298,17 +298,10 @@
     ];
 
     const INITIAL_BATCHES = [
-      { id: 'b1', name: '2026/05 堅果果乾團購檔期', active: true },
-      { id: 'b2', name: '2026/04 日韓春季服飾代購', active: false }
+      { id: 'b_default', name: '2026/06 代購開團', active: true }
     ];
 
-    const INITIAL_ORDERS = [
-      { id: 'o1', date: '2026-05-20', client: '陳美玲', channel: 'Google表單', item: '綜合堅果特大包', unitCost: 300, unitPrice: 490, quantity: 2, costCurrency: 'TWD', priceCurrency: 'TWD', cost: 600, price: 980, profit: 380, status: '已出貨', batchId: 'b1' },
-      { id: 'o2', date: '2026-05-22', client: '林志豪', channel: 'IG手動', item: '頂級野生開心果', unitCost: 150000, unitPrice: 390, quantity: 1, costCurrency: 'VND', priceCurrency: 'TWD', cost: 150000, price: 390, profit: 190, status: '已買項目', batchId: 'b1' },
-      { id: 'o3', date: '2026-05-23', client: '張雅婷', channel: 'Google表單', item: '無鹽烘焙腰果', unitCost: 200, unitPrice: 350, quantity: 3, costCurrency: 'TWD', priceCurrency: 'TWD', cost: 600, price: 1050, profit: 450, status: '待買項目', batchId: 'b1' },
-      { id: 'o4', date: '2026-04-12', client: '王思涵', channel: 'IG手動', item: '法式風衣外套 - 桃粉', unitCost: 25, unitPrice: 2180, quantity: 1, costCurrency: 'USD', priceCurrency: 'TWD', cost: 25, price: 2180, profit: 1367.5, status: '已出貨', batchId: 'b2' },
-      { id: 'o5', date: '2026-04-15', client: '李佳蓉', channel: 'IG手動', item: '日系針織罩衫 - 米白', unitCost: 850, unitPrice: 1480, quantity: 1, costCurrency: 'TWD', priceCurrency: 'TWD', cost: 850, price: 1480, profit: 630, status: '已出貨', batchId: 'b2' }
-    ];
+    const INITIAL_ORDERS = [];
 
     // 2026年 01月-03月 您的真實花費預載入
     const INITIAL_TRANSACTIONS = [
@@ -478,6 +471,28 @@
       useEffect(() => { localStorage.setItem('cofi_batches', JSON.stringify(batches)); }, [batches]);
       useEffect(() => { localStorage.setItem('cofi_orders', JSON.stringify(orders)); }, [orders]);
       useEffect(() => { localStorage.setItem('cofi_transactions', JSON.stringify(transactions)); }, [transactions]);
+
+      // 一次性資料移轉（自動過濾舊版 April/May 模擬數據）
+      useEffect(() => {
+        const migrated = localStorage.getItem('cofi_mock_migrated_v6');
+        if (!migrated) {
+          setBatches(prev => {
+            const filtered = prev.filter(b => b.id !== 'b1' && b.id !== 'b2');
+            if (filtered.length === 0) {
+              return [{ id: 'b_default', name: '2026/06 代購開團', active: true }];
+            }
+            return filtered;
+          });
+          setOrders(prev => prev.filter(o => o.batchId !== 'b1' && o.batchId !== 'b2' && o.id !== 'o1' && o.id !== 'o2' && o.id !== 'o3' && o.id !== 'o4' && o.id !== 'o5'));
+          setSelectedBatchId(prev => {
+            if (prev === 'b1' || prev === 'b2') {
+              return 'b_default';
+            }
+            return prev;
+          });
+          localStorage.setItem('cofi_mock_migrated_v6', 'true');
+        }
+      }, []);
 
       const showToast = (message, type = 'success') => {
         const id = Date.now() + Math.random().toString(36).substring(2, 5);
@@ -782,6 +797,30 @@
           };
           setOrders(prev => [newOrder, ...prev]);
           showToast("🛍️ IG 訂單登錄成功！", 'success');
+        } else if (type === 'editOrder') {
+          const uCost = parseFloat(formData.unitCost) || 0;
+          const uPrice = parseFloat(formData.unitPrice) || 0;
+          const q = parseInt(formData.quantity, 10) || 1;
+          const costCurr = formData.costCurrency || 'VND';
+          const priceCurr = formData.priceCurrency || 'TWD';
+          
+          const costRate = exchangeRates[costCurr] || 1.0;
+          const priceRate = exchangeRates[priceCurr] || 1.0;
+          
+          setOrders(prev => prev.map(o => o.id === data.id ? Object.assign({}, o, {
+            date: formData.date,
+            client: formData.client,
+            item: formData.item,
+            unitCost: uCost,
+            unitPrice: uPrice,
+            quantity: q,
+            costCurrency: costCurr,
+            priceCurrency: priceCurr,
+            cost: uCost * q,
+            price: uPrice * q,
+            profit: (uPrice * priceRate - uCost * costRate) * q
+          }) : o));
+          showToast("🛍️ 訂單資料已成功更新！", 'success');
         } else if (type === 'addTransaction') {
           const amt = parseFloat(formData.amount) || 0;
           const newTx = {
@@ -858,7 +897,7 @@
           <div className="flex-1 flex flex-col justify-between overflow-y-auto no-scrollbar relative bg-zinc-950 text-zinc-100 bg-grid-overlay bg-glow-pink bg-glow-blue pb-24">
             
             {/* Header */}
-            <header className="pt-6 pb-4 px-5 border-b border-zinc-900/60 flex items-center justify-between sticky top-0 bg-zinc-950/80 backdrop-blur-lg z-30">
+            <header className="pt-6 pb-4 px-5 border-b border-zinc-900/60 flex items-center justify-between sticky top-0 bg-zinc-950/80 backdrop-blur-lg z-30 max-sm:pt-[calc(env(safe-area-inset-top,0px)+16px)]">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-purple-600 via-pink-500 to-blue-500 p-[1.5px] shadow-lg">
                   <div className="w-full h-full bg-zinc-950 rounded-[14px] flex items-center justify-center">
@@ -1106,7 +1145,10 @@
                               <button onClick={() => toggleOrderStatus(order.id)} className={`px-2 py-1 rounded text-[9px] font-black flex items-center gap-1 ${order.status === '待買項目' ? 'bg-yellow-500/10 text-yellow-400' : order.status === '已買項目' ? 'bg-blue-500/10 text-blue-400' : 'bg-green-500/10 text-green-400'}`}>
                                 {order.status}
                               </button>
-                              <button onClick={() => handleOrderDelete(order.id)} className="text-zinc-600 hover:text-red-400"><Icon name="Trash2" size={12} /></button>
+                              <div className="flex items-center gap-2.5">
+                                <button onClick={() => setSheet({ isOpen: true, type: 'editOrder', data: order })} className="text-zinc-500 hover:text-purple-400 transition-colors" title="編輯訂單"><Icon name="Edit" size={12} /></button>
+                                <button onClick={() => handleOrderDelete(order.id)} className="text-zinc-600 hover:text-red-400 transition-colors" title="刪除訂單"><Icon name="Trash2" size={12} /></button>
+                              </div>
                             </div>
                           </div>
                         );
@@ -1345,6 +1387,7 @@
                       {sheet.type === 'addStock' && '📈 新增證券股票持股'}
                       {sheet.type === 'excelImport' && '⚙️ Excel / 試算表快速匯入室'}
                       {sheet.type === 'addBatch' && '🛍️ 新增團購與代購檔期'}
+                      {sheet.type === 'editOrder' && '🛍️ 編輯好物推推訂單'}
                     </h3>
                     <button onClick={() => setSheet({ isOpen: false, type: '', data: null })} className="p-1 rounded-full bg-zinc-800 text-zinc-400"><Icon name="X" size={14} /></button>
                   </div>
@@ -1401,6 +1444,21 @@
         priceCurrency: 'TWD' // 預設售價是台幣 (TWD)
       });
       const [priceSuggestions, setPriceSuggestions] = useState([]);
+
+      useEffect(() => {
+        if (type === 'editOrder' && data) {
+          setOrderForm({
+            client: data.client || '',
+            date: data.date || new Date().toISOString().split('T')[0],
+            item: data.item || '',
+            unitCost: data.unitCost !== undefined ? data.unitCost : (data.cost / (data.quantity || 1)),
+            unitPrice: data.unitPrice !== undefined ? data.unitPrice : (data.price / (data.quantity || 1)),
+            quantity: data.quantity !== undefined ? String(data.quantity) : '1',
+            costCurrency: data.costCurrency || 'VND',
+            priceCurrency: data.priceCurrency || 'TWD'
+          });
+        }
+      }, [type, data]);
 
       const [txForm, setTxForm] = useState({
         txType: 'expense', amount: '', currency: 'TWD', category: '餐飲伙食', owner: '共同', date: new Date().toISOString().split('T')[0], desc: ''
@@ -1636,6 +1694,7 @@
           );
 
         case 'addOrder':
+        case 'editOrder':
           return (
             <form onSubmit={(e) => onSubmit(e, orderForm)} className="space-y-3.5">
               <div className="grid grid-cols-2 gap-3">
@@ -1710,7 +1769,9 @@
                 </div>
               )}
 
-              <button type="submit" className="w-full py-2.5 bg-gradient-to-r from-pink-500 to-purple-600 text-white font-extrabold text-xs rounded-xl shadow-lg active-press mt-2">登錄 IG 訂單</button>
+              <button type="submit" className="w-full py-2.5 bg-gradient-to-r from-pink-500 to-purple-600 text-white font-extrabold text-xs rounded-xl shadow-lg active-press mt-2">
+                {type === 'editOrder' ? '儲存更新訂單 ⚡' : '登錄 IG 訂單'}
+              </button>
             </form>
           );
 
