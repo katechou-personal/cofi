@@ -76,8 +76,8 @@
     }
   </script>
 
-  <!-- Lucide Icons CDN (Cloudflare) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/lucide/0.300.0/lucide.min.js"></script>
+  <!-- Lucide Icons CDN (Unpkg Cloudflare Proxy) -->
+  <script src="https://unpkg.com/lucide@0.300.0/dist/umd/lucide.js"></script>
 
   <!-- React & ReactDOM Production CDNs (Cloudflare) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
@@ -454,8 +454,16 @@
       const [toasts, setToasts] = useState([]);
       const [isUpdatingStock, setIsUpdatingStock] = useState(false);
       const [selectedBatchId, setSelectedBatchId] = useState(() => {
-        const active = INITIAL_BATCHES.find(b => b.active);
-        return active ? active.id : INITIAL_BATCHES[0].id;
+        try {
+          const local = localStorage.getItem('cofi_batches');
+          const parsed = local ? JSON.parse(local) : null;
+          const currentBatches = Array.isArray(parsed) ? parsed : INITIAL_BATCHES;
+          const active = currentBatches.find(b => b.active);
+          return active ? active.id : currentBatches[0].id;
+        } catch(e) {
+          const active = INITIAL_BATCHES.find(b => b.active);
+          return active ? active.id : INITIAL_BATCHES[0].id;
+        }
       });
       const [orderFilter, setOrderFilter] = useState('全部');
       const [cashflowFilter, setCashflowFilter] = useState('全部');
@@ -801,6 +809,24 @@
           };
           setStocks(prev => [...prev, newStk]);
           showToast("📈 " + newStk.symbol + " 已加入持股組合！", 'success');
+        } else if (type === 'addBatch') {
+          const newBatchId = 'b_' + Date.now();
+          const newBatch = {
+            id: newBatchId,
+            name: formData.name,
+            active: formData.active
+          };
+          setBatches(prev => {
+            let updated = prev;
+            if (formData.active) {
+              updated = prev.map(b => Object.assign({}, b, { active: false }));
+            }
+            return [...updated, newBatch];
+          });
+          if (formData.active) {
+            setSelectedBatchId(newBatchId);
+          }
+          showToast("🛍️ 團購檔期「" + formData.name + "」已成功建立！", 'success');
         }
 
         setSheet({ isOpen: false, type: '', data: null });
@@ -978,13 +1004,22 @@
                       <h2 className="text-sm font-extrabold text-zinc-200">🛍 好物推推副業看板</h2>
                       <p className="text-[10px] text-zinc-500 font-bold mt-0.5">堅果團購與 IG 服飾手動下單</p>
                     </div>
-                    <select 
-                      value={selectedBatchId} 
-                      onChange={(e) => setSelectedBatchId(e.target.value)}
-                      className="bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 font-bold rounded-xl px-2 py-1.5 outline-none"
-                    >
-                      {batches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                    </select>
+                    <div className="flex items-center gap-1.5">
+                      <select 
+                        value={selectedBatchId} 
+                        onChange={(e) => setSelectedBatchId(e.target.value)}
+                        className="bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 font-bold rounded-xl px-2.5 py-1.5 outline-none max-w-[130px] sm:max-w-none truncate"
+                      >
+                        {batches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                      </select>
+                      <button 
+                        onClick={() => setSheet({ isOpen: true, type: 'addBatch', data: null })}
+                        className="w-7 h-7 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 flex items-center justify-center hover:text-purple-400 hover:border-purple-500/30 transition-all active-press"
+                        title="手動新增團購檔期"
+                      >
+                        <Icon name="Plus" size={13} />
+                      </button>
+                    </div>
                   </div>
 
                   <div className="premium-card rounded-2xl p-4 border-purple-500/20">
@@ -1309,6 +1344,7 @@
                       {sheet.type === 'addTransaction' && '🏦 新增家庭日常記帳'}
                       {sheet.type === 'addStock' && '📈 新增證券股票持股'}
                       {sheet.type === 'excelImport' && '⚙️ Excel / 試算表快速匯入室'}
+                      {sheet.type === 'addBatch' && '🛍️ 新增團購與代購檔期'}
                     </h3>
                     <button onClick={() => setSheet({ isOpen: false, type: '', data: null })} className="p-1 rounded-full bg-zinc-800 text-zinc-400"><Icon name="X" size={14} /></button>
                   </div>
@@ -1372,6 +1408,10 @@
 
       const [stockForm, setStockForm] = useState({
         symbol: '', name: '', shares: '', avgCost: '', currentPrice: '', owner: 'Chu'
+      });
+
+      const [batchForm, setBatchForm] = useState({
+        name: '', active: true
       });
 
       // --- Excel 匯入表單專屬狀態 ---
@@ -1857,6 +1897,39 @@
               )}
 
             </div>
+          );
+
+        case 'addBatch':
+          return (
+            <form 
+              onSubmit={(e) => onSubmit(e, batchForm)} 
+              className="space-y-4 text-left"
+            >
+              <div>
+                <label className="text-[10px] font-bold text-zinc-400 block mb-1">團購 / 代購檔期名稱 *</label>
+                <input 
+                  type="text" 
+                  required 
+                  value={batchForm.name} 
+                  onChange={(e) => setBatchForm(prev => Object.assign({}, prev, { name: e.target.value }))} 
+                  className="w-full px-3.5 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-100 rounded-xl focus:border-purple-500 outline-none" 
+                  placeholder="例如：2026/06 堅果果乾團購檔期、260619 出貨檔" 
+                />
+              </div>
+              <div className="flex items-center gap-2 pt-1">
+                <input 
+                  type="checkbox" 
+                  id="setAsActive" 
+                  checked={batchForm.active} 
+                  onChange={(e) => setBatchForm(prev => Object.assign({}, prev, { active: e.target.checked }))} 
+                  className="rounded border-zinc-800 bg-zinc-950 text-purple-600 focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5" 
+                />
+                <label htmlFor="setAsActive" className="text-[11px] font-bold text-zinc-300 select-none cursor-pointer">
+                  直接設為當前主要（活躍）檔期
+                </label>
+              </div>
+              <button type="submit" className="w-full py-2.5 bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-extrabold text-xs rounded-xl shadow-lg active-press mt-2">建立新檔期</button>
+            </form>
           );
 
         case 'settings':
