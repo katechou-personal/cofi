@@ -1407,6 +1407,13 @@
                       setBatches(payload.batches);
                       setOrders(payload.orders);
                       setTransactions(payload.transactions);
+                      
+                      // 確保同步更新當前選中的檔期 ID
+                      if (Array.isArray(payload.batches) && payload.batches.length > 0) {
+                        const active = payload.batches.find(b => b.active);
+                        setSelectedBatchId(active ? active.id : payload.batches[0].id);
+                      }
+                      
                       showToast('⚡ 跨裝置資料同步成功！已完美載入。', 'success');
                       setSheet({ isOpen: false, type: '', data: null });
                     }}
