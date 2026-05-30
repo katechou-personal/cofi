@@ -678,6 +678,147 @@
         }
       };
 
+      // v8 自動恢復丟失的 2026/06 代購開團資料
+      useEffect(() => {
+        if (!isFirebaseReady || !db) return;
+        
+        const runRecovery = async () => {
+          const flag = localStorage.getItem('cofi_recovered_v8_orders_v2');
+          if (flag) return; // 已經執行過恢復，直接跳過
+          
+          try {
+            console.log("⚡ 啟動 CoFi v8 資料自動恢復引擎...");
+            
+            // 1. 確保 2026/06 代購開團 檔期存在
+            const batchRef = db.collection('batches').doc('b_default');
+            const batchDoc = await batchRef.get();
+            if (!batchDoc.exists) {
+              await batchRef.set({
+                id: 'b_default',
+                name: '2026/06代購開團',
+                active: true
+              });
+            }
+            
+            // 2. 重建 7 筆真實訂單
+            const rateVND = 0.00133;
+            const ordersToRestore = [
+              {
+                id: 'restore_o1',
+                client: '阿燕',
+                item: '三妹去皮腰果 500g',
+                unitCost: 150000,
+                unitPrice: 390,
+                quantity: 1,
+                costCurrency: 'VND',
+                priceCurrency: 'TWD',
+                channel: 'LINE下單',
+                status: '待買項目'
+              },
+              {
+                id: 'restore_o2',
+                client: '佳',
+                item: '去皮腰果 500g',
+                unitCost: 150000,
+                unitPrice: 390,
+                quantity: 5,
+                costCurrency: 'VND',
+                priceCurrency: 'TWD',
+                channel: 'LINE下單',
+                status: '待買項目'
+              },
+              {
+                id: 'restore_o3',
+                client: '佳',
+                item: '帶皮腰果 500g',
+                unitCost: 150000,
+                unitPrice: 390,
+                quantity: 5,
+                costCurrency: 'VND',
+                priceCurrency: 'TWD',
+                channel: 'LINE下單',
+                status: '待買項目'
+              },
+              {
+                id: 'restore_o4',
+                client: '妍',
+                item: 'PushPush 短版襯衫 S',
+                unitCost: 200000,
+                unitPrice: 490,
+                quantity: 1,
+                costCurrency: 'VND',
+                priceCurrency: 'TWD',
+                channel: 'IG下單',
+                status: '待買項目'
+              },
+              {
+                id: 'restore_o5',
+                client: '詩',
+                item: 'YouOn 亞麻落地褲 M',
+                unitCost: 250000,
+                unitPrice: 590,
+                quantity: 1,
+                costCurrency: 'VND',
+                priceCurrency: 'TWD',
+                channel: 'IG下單',
+                status: '待買項目'
+              },
+              {
+                id: 'restore_o6',
+                client: 'April',
+                item: 'YouOn 套裝',
+                unitCost: 400000,
+                unitPrice: 980,
+                quantity: 1,
+                costCurrency: 'VND',
+                priceCurrency: 'TWD',
+                channel: 'LINE下單',
+                status: '待買項目'
+              },
+              {
+                id: 'restore_o7',
+                client: 'April',
+                item: 'YouOn 亞麻背心',
+                unitCost: 150000,
+                unitPrice: 390,
+                quantity: 1,
+                costCurrency: 'VND',
+                priceCurrency: 'TWD',
+                channel: 'LINE下單',
+                status: '待買項目'
+              }
+            ];
+            
+            const writeBatch = db.batch();
+            ordersToRestore.forEach(ord => {
+              const cost = ord.unitCost * ord.quantity;
+              const price = ord.unitPrice * ord.quantity;
+              const costTWD = ord.costCurrency === 'VND' ? cost * rateVND : cost;
+              const priceTWD = ord.priceCurrency === 'VND' ? price * rateVND : price;
+              const profit = priceTWD - costTWD;
+              
+              const finalOrder = Object.assign({}, ord, {
+                date: '2026-05-30',
+                cost,
+                price,
+                profit,
+                batchId: 'b_default'
+              });
+              
+              writeBatch.set(db.collection('orders').doc(ord.id), finalOrder);
+            });
+            
+            await writeBatch.commit();
+            localStorage.setItem('cofi_recovered_v8_orders_v2', 'true');
+            console.log("🎉 CoFi v8 資料自動恢復成功！已上傳至雲端！");
+          } catch (err) {
+            console.error("Auto recovery failed:", err);
+          }
+        };
+        
+        runRecovery();
+      }, [isFirebaseReady]);
+
       // Automatically align active batch
       useEffect(() => {
         const active = batches.find(b => b.active);
