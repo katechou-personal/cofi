@@ -86,6 +86,11 @@
   <!-- Babel Standalone CDN (Cloudflare) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
 
+  <!-- Firebase Standalone Compat CDNs (Google) -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
   <style>
     body {
       margin: 0;
@@ -218,6 +223,43 @@
 
   <!-- React Code with Babel -->
   <script type="text/babel">
+    // ==========================================
+    // Firebase 專屬配置金鑰 (請將您的 Firebase Console 密鑰貼在此處)
+    // ==========================================
+    const FIREBASE_CONFIG = {
+      apiKey: "AIzaSyDFxtH5c3Wkk4QmOb55iKX3wc7IVJ5MrWY",
+      authDomain: "cofi-family-hub.firebaseapp.com",
+      projectId: "cofi-family-hub",
+      storageBucket: "cofi-family-hub.firebasestorage.app",
+      messagingSenderId: "95693962451",
+      appId: "1:95693962451:web:45d24ce4d2fff4209ea826"
+    };
+
+    let db = null;
+    let auth = null;
+    let isFirebaseReady = false;
+
+    if (typeof firebase !== 'undefined' && FIREBASE_CONFIG && FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey !== "YOUR_API_KEY") {
+      try {
+        firebase.initializeApp(FIREBASE_CONFIG);
+        db = firebase.firestore();
+        auth = firebase.auth();
+        isFirebaseReady = true;
+
+        // 啟用 Firestore 離線持久化 (Offline Persistence)
+        db.enablePersistence({ synchronizeTabs: true })
+          .catch((err) => {
+            if (err.code == 'failed-precondition') {
+              console.warn("Multiple tabs open, persistence can only be enabled in one tab at a time.");
+            } else if (err.code == 'unimplemented') {
+              console.warn("The current browser does not support all of the features required to enable persistence.");
+            }
+          });
+      } catch (err) {
+        console.error("Firebase initialization failed:", err);
+      }
+    }
+
     const { useState, useEffect, useMemo } = React;
 
     // ==========================================
@@ -361,7 +403,37 @@
     function App() {
       // 核心狀態 (try-catch)
       const [activeTab, setActiveTab] = useState('dashboard');
-      
+
+      // 權限與身分鎖定
+      const [currentUser, setCurrentUser] = useState(() => {
+        if (typeof window !== 'undefined') {
+          const params = new URLSearchParams(window.location.search);
+          const user = params.get('user');
+          if (user === 'bu' || user === 'chu') {
+            localStorage.setItem('cofi_current_user', user);
+            return user;
+          }
+          const cached = localStorage.getItem('cofi_current_user');
+          if (cached === 'bu' || cached === 'chu') {
+            return cached;
+          }
+        }
+        return 'bu'; // 預設為 Bu 🐟
+      });
+
+      // Firebase 匿名登入
+      useEffect(() => {
+        if (isFirebaseReady && auth) {
+          auth.signInAnonymously()
+            .then((userCredential) => {
+              console.log("Firebase Anonymous Sign-In Success! UID:", userCredential.user.uid);
+            })
+            .catch((error) => {
+              console.error("Firebase Anonymous Sign-In Failed:", error);
+            });
+        }
+      }, []);
+
       const [exchangeRates, setExchangeRates] = useState(() => {
         try {
           const local = localStorage.getItem('cofi_rates');
@@ -446,6 +518,7 @@
       // UI 狀態
       const [toasts, setToasts] = useState([]);
       const [isUpdatingStock, setIsUpdatingStock] = useState(false);
+      const [isSyncing, setIsSyncing] = useState(false);
       const [selectedBatchId, setSelectedBatchId] = useState(() => {
         try {
           const local = localStorage.getItem('cofi_batches');
@@ -471,6 +544,147 @@
       useEffect(() => { localStorage.setItem('cofi_batches', JSON.stringify(batches)); }, [batches]);
       useEffect(() => { localStorage.setItem('cofi_orders', JSON.stringify(orders)); }, [orders]);
       useEffect(() => { localStorage.setItem('cofi_transactions', JSON.stringify(transactions)); }, [transactions]);
+
+      // Real-time Firestore Sync (實時雙向監聽 5 大數據集合)
+      useEffect(() => {
+        if (!isFirebaseReady || !db) return;
+
+        // Accounts subscription
+        const unsubAccounts = db.collection('accounts').onSnapshot(snapshot => {
+          if (snapshot.empty) {
+            INITIAL_ACCOUNTS.forEach(a => {
+              db.collection('accounts').doc(a.id).set(a);
+            });
+          } else {
+            const list = [];
+            snapshot.forEach(doc => list.push(doc.data()));
+            setAccounts(list);
+          }
+        }, err => console.error("Accounts sync failed:", err));
+
+        // Stocks subscription
+        const unsubStocks = db.collection('stocks').onSnapshot(snapshot => {
+          if (snapshot.empty) {
+            INITIAL_STOCKS.forEach(s => {
+              db.collection('stocks').doc(s.id).set(s);
+            });
+          } else {
+            const list = [];
+            snapshot.forEach(doc => list.push(doc.data()));
+            setStocks(list);
+          }
+        }, err => console.error("Stocks sync failed:", err));
+
+        // Batches subscription
+        const unsubBatches = db.collection('batches').onSnapshot(snapshot => {
+          if (snapshot.empty) {
+            INITIAL_BATCHES.forEach(b => {
+              db.collection('batches').doc(b.id).set(b);
+            });
+          } else {
+            const list = [];
+            snapshot.forEach(doc => list.push(doc.data()));
+            setBatches(list);
+          }
+        }, err => console.error("Batches sync failed:", err));
+
+        // Orders subscription
+        const unsubOrders = db.collection('orders').onSnapshot(snapshot => {
+          const list = [];
+          snapshot.forEach(doc => list.push(doc.data()));
+          list.sort((a, b) => b.id.localeCompare(a.id));
+          setOrders(list);
+        }, err => console.error("Orders sync failed:", err));
+
+        // Transactions subscription
+        const unsubTransactions = db.collection('transactions').onSnapshot(snapshot => {
+          if (snapshot.empty) {
+            INITIAL_TRANSACTIONS.forEach(t => {
+              db.collection('transactions').doc(t.id).set(t);
+            });
+          } else {
+            const list = [];
+            snapshot.forEach(doc => list.push(doc.data()));
+            list.sort((a, b) => b.date === a.date ? b.id.localeCompare(a.id) : b.date.localeCompare(a.date));
+            setTransactions(list);
+          }
+        }, err => console.error("Transactions sync failed:", err));
+
+        return () => {
+          unsubAccounts();
+          unsubStocks();
+          unsubBatches();
+          unsubOrders();
+          unsubTransactions();
+        };
+      }, [isFirebaseReady]);
+
+      // 手動觸發雲端即時同步
+      const triggerManualSync = () => {
+        if (isFirebaseReady && db) {
+          setIsSyncing(true);
+          Promise.all([
+            db.collection('accounts').get(),
+            db.collection('stocks').get(),
+            db.collection('batches').get(),
+            db.collection('orders').get(),
+            db.collection('transactions').get()
+          ]).then(([accSnap, stkSnap, batSnap, ordSnap, txSnap]) => {
+            // Update accounts
+            if (!accSnap.empty) {
+              const list = [];
+              accSnap.forEach(doc => list.push(doc.data()));
+              setAccounts(list);
+            }
+            // Update stocks
+            if (!stkSnap.empty) {
+              const list = [];
+              stkSnap.forEach(doc => list.push(doc.data()));
+              setStocks(list);
+            }
+            // Update batches
+            if (!batSnap.empty) {
+              const list = [];
+              batSnap.forEach(doc => list.push(doc.data()));
+              setBatches(list);
+            }
+            // Update orders
+            if (!ordSnap.empty) {
+              const list = [];
+              ordSnap.forEach(doc => list.push(doc.data()));
+              list.sort((a, b) => b.id.localeCompare(a.id));
+              setOrders(list);
+            }
+            // Update transactions
+            if (!txSnap.empty) {
+              const list = [];
+              txSnap.forEach(doc => list.push(doc.data()));
+              list.sort((a, b) => b.date === a.date ? b.id.localeCompare(a.id) : b.date.localeCompare(a.date));
+              setTransactions(list);
+            }
+            showToast('🔄 雲端數據已成功手動對齊同步！', 'success');
+          }).catch(err => {
+            console.error("Manual sync failed:", err);
+            showToast('❌ 手動同步失敗，請檢查網路或金鑰！', 'error');
+          }).finally(() => {
+            setIsSyncing(false);
+          });
+        } else {
+          setIsSyncing(true);
+          setTimeout(() => {
+            setIsSyncing(false);
+            showToast('ℹ️ 本地離線模式，已讀取本機快取！', 'info');
+          }, 800);
+        }
+      };
+
+      // Automatically align active batch
+      useEffect(() => {
+        const active = batches.find(b => b.active);
+        if (active) {
+          setSelectedBatchId(active.id);
+        }
+      }, [batches]);
 
       // 一次性資料移轉（自動過濾舊版 April/May 模擬數據）
       useEffect(() => {
@@ -603,15 +817,20 @@
 
       const toggleOrderStatus = (orderId) => {
         const cycle = ['待買項目', '已買項目', '已出貨'];
-        setOrders(prev => prev.map(o => {
-          if (o.id === orderId) {
-            const nextIdx = (cycle.indexOf(o.status) + 1) % cycle.length;
-            const nextStatus = cycle[nextIdx];
-            showToast("訂單「" + o.client + "」已更新為 " + nextStatus + "!", 'info');
-            return Object.assign({}, o, { status: nextStatus });
-          }
-          return o;
-        }));
+        const target = orders.find(o => o.id === orderId);
+        if (!target) return;
+        const nextIdx = (cycle.indexOf(target.status) + 1) % cycle.length;
+        const nextStatus = cycle[nextIdx];
+        const updated = Object.assign({}, target, { status: nextStatus });
+        
+        if (isFirebaseReady && db) {
+          db.collection('orders').doc(orderId).set(updated)
+            .then(() => showToast("訂單「" + target.client + "」已更新為 " + nextStatus + "!", 'info'))
+            .catch(err => console.error("Firestore status update failed:", err));
+        } else {
+          setOrders(prev => prev.map(o => o.id === orderId ? updated : o));
+          showToast("訂單「" + target.client + "」已更新為 " + nextStatus + "!", 'info');
+        }
       };
 
       const simulateGoogleFormImport = () => {
@@ -619,12 +838,10 @@
         const randomClient = SIMULATED_CLIENTS[Math.floor(Math.random() * SIMULATED_CLIENTS.length)];
         const quantity = Math.floor(Math.random() * 3) + 1;
         
-        // 智慧隨機：如果是堅果/開心果，進貨價在越南買所以是越南盾 (VND)，售價是台幣 (TWD)
         const isVndCost = randomGood.item.indexOf('開心果') !== -1 || randomGood.item.indexOf('腰果') !== -1 || Math.random() > 0.5;
         const costCurrency = isVndCost ? 'VND' : 'TWD';
         const priceCurrency = 'TWD';
         
-        // 越南盾金額大概是台幣進價的 750 倍，取個整數
         const unitCost = isVndCost ? Math.round((randomGood.cost * 750) / 1000) * 1000 : randomGood.cost;
         const unitPrice = randomGood.price;
         
@@ -651,19 +868,44 @@
           status: '待買項目',
           batchId: selectedBatchId
         };
-        setOrders(prev => [newOrder, ...prev]);
-        showToast("📥 堅果表單自動匯入成功！" + randomClient + " 訂購了 " + randomGood.item + " x " + quantity + " 件", 'success');
+
+        if (isFirebaseReady && db) {
+          db.collection('orders').doc(newOrder.id).set(newOrder)
+            .then(() => showToast("📥 堅果表單自動匯入成功！" + randomClient + " 訂購了 " + randomGood.item + " x " + quantity + " 件", 'success'))
+            .catch(err => console.error("Firestore order simulate failed:", err));
+        } else {
+          setOrders(prev => [newOrder, ...prev]);
+          showToast("📥 堅果表單自動匯入成功！" + randomClient + " 訂購了 " + randomGood.item + " x " + quantity + " 件", 'success');
+        }
       };
 
       const triggerStockPriceUpdate = () => {
         setIsUpdatingStock(true);
         setTimeout(() => {
-          setStocks(prev => prev.map(s => {
-            const change = (Math.random() * 7 - 2.5) / 100;
-            return Object.assign({}, s, { currentPrice: Math.round((s.currentPrice * (1 + change)) * 100) / 100 });
-          }));
-          setIsUpdatingStock(false);
-          showToast('📈 證券即時行情更新完成！', 'success');
+          if (isFirebaseReady && db) {
+            const batch = db.batch();
+            stocks.forEach(s => {
+              const change = (Math.random() * 7 - 2.5) / 100;
+              const newPrice = Math.round((s.currentPrice * (1 + change)) * 100) / 100;
+              batch.update(db.collection('stocks').doc(s.id), { currentPrice: newPrice });
+            });
+            batch.commit()
+              .then(() => {
+                setIsUpdatingStock(false);
+                showToast('📈 證券即時行情更新完成！', 'success');
+              })
+              .catch(err => {
+                console.error("Firestore stock update failed:", err);
+                setIsUpdatingStock(false);
+              });
+          } else {
+            setStocks(prev => prev.map(s => {
+              const change = (Math.random() * 7 - 2.5) / 100;
+              return Object.assign({}, s, { currentPrice: Math.round((s.currentPrice * (1 + change)) * 100) / 100 });
+            }));
+            setIsUpdatingStock(false);
+            showToast('📈 證券即時行情更新完成！', 'success');
+          }
         }, 800);
       };
 
@@ -696,57 +938,257 @@
 
       const handleOrderDelete = (id) => {
         openConfirmModal('確認刪除訂單？', '此動作將影響本期盈餘計算。', () => {
-          setOrders(prev => prev.filter(o => o.id !== id));
-          setModal({ isOpen: false, title: '', message: '', onConfirm: null });
-          showToast('訂單已刪除', 'info');
+          if (isFirebaseReady && db) {
+            db.collection('orders').doc(id).delete()
+              .then(() => {
+                setModal({ isOpen: false, title: '', message: '', onConfirm: null });
+                showToast('訂單已刪除', 'info');
+              })
+              .catch(err => console.error("Firestore order delete failed:", err));
+          } else {
+            setOrders(prev => prev.filter(o => o.id !== id));
+            setModal({ isOpen: false, title: '', message: '', onConfirm: null });
+            showToast('訂單已刪除', 'info');
+          }
         });
       };
 
       const handleTransactionDelete = (id) => {
         openConfirmModal('確認刪除記帳紀錄？', '這會從本月家庭收支中移除。', () => {
-          setTransactions(prev => prev.filter(t => t.id !== id));
-          setModal({ isOpen: false, title: '', message: '', onConfirm: null });
-          showToast('記帳紀錄已刪除', 'info');
+          if (isFirebaseReady && db) {
+            db.collection('transactions').doc(id).delete()
+              .then(() => {
+                setModal({ isOpen: false, title: '', message: '', onConfirm: null });
+                showToast('記帳紀錄已刪除', 'info');
+              })
+              .catch(err => console.error("Firestore tx delete failed:", err));
+          } else {
+            setTransactions(prev => prev.filter(t => t.id !== id));
+            setModal({ isOpen: false, title: '', message: '', onConfirm: null });
+            showToast('記帳紀錄已刪除', 'info');
+          }
         });
       };
 
       const handleStockDelete = (id) => {
         openConfirmModal('確認刪除此持股？', '這會將其自您的持股列表中移除。', () => {
-          setStocks(prev => prev.filter(s => s.id !== id));
-          setModal({ isOpen: false, title: '', message: '', onConfirm: null });
-          showToast('持股已移除', 'info');
+          if (isFirebaseReady && db) {
+            db.collection('stocks').doc(id).delete()
+              .then(() => {
+                setModal({ isOpen: false, title: '', message: '', onConfirm: null });
+                showToast('持股已移除', 'info');
+              })
+              .catch(err => console.error("Firestore stock delete failed:", err));
+          } else {
+            setStocks(prev => prev.filter(s => s.id !== id));
+            setModal({ isOpen: false, title: '', message: '', onConfirm: null });
+            showToast('持股已移除', 'info');
+          }
         });
       };
 
       const handleAccountDelete = (id) => {
         openConfirmModal('確認刪除此帳戶？', '這會將此帳戶自餘額盤點列表中移除，但不會影響已錄入的歷史流水帳目。', () => {
-          setAccounts(prev => prev.filter(a => a.id !== id));
-          setModal({ isOpen: false, title: '', message: '', onConfirm: null });
-          setSheet({ isOpen: false, type: '', data: null });
-          showToast('帳戶已成功移除', 'info');
+          if (isFirebaseReady && db) {
+            db.collection('accounts').doc(id).delete()
+              .then(() => {
+                setModal({ isOpen: false, title: '', message: '', onConfirm: null });
+                setSheet({ isOpen: false, type: '', data: null });
+                showToast('帳戶已成功移除', 'info');
+              })
+              .catch(err => console.error("Firestore account delete failed:", err));
+          } else {
+            setAccounts(prev => prev.filter(a => a.id !== id));
+            setModal({ isOpen: false, title: '', message: '', onConfirm: null });
+            setSheet({ isOpen: false, type: '', data: null });
+            showToast('帳戶已成功移除', 'info');
+          }
         });
       };
 
       const handleClearOrders = () => {
-        setOrders([]);
-        showToast('🧹 已成功清空「好物推推」所有模擬訂單！', 'info');
+        if (isFirebaseReady && db) {
+          const batch = db.batch();
+          orders.forEach(o => batch.delete(db.collection('orders').doc(o.id)));
+          batch.commit()
+            .then(() => showToast('🧹 已成功清空「好物推推」所有模擬訂單！', 'info'))
+            .catch(err => console.error("Firestore orders clear failed:", err));
+        } else {
+          setOrders([]);
+          showToast('🧹 已成功清空「好物推推」所有模擬訂單！', 'info');
+        }
         setSheet({ isOpen: false, type: '', data: null });
       };
 
       const handleClearTransactions = () => {
-        setTransactions([]);
-        showToast('🧹 已成功清空所有日常收支流水明細！', 'info');
+        if (isFirebaseReady && db) {
+          const batch = db.batch();
+          transactions.forEach(t => batch.delete(db.collection('transactions').doc(t.id)));
+          batch.commit()
+            .then(() => showToast('🧹 已成功清空所有日常收支流水明細！', 'info'))
+            .catch(err => console.error("Firestore transactions clear failed:", err));
+        } else {
+          setTransactions([]);
+          showToast('🧹 已成功清空所有日常收支流水明細！', 'info');
+        }
         setSheet({ isOpen: false, type: '', data: null });
       };
 
-      // Excel 數據寫入合併
-      const handleExcelImport = (importedList) => {
+      // Excel & 麻布記帳 CSV 數據智慧分批寫入 (500 筆為一包)
+      const handleExcelImport = async (importedList) => {
         if (importedList.length === 0) {
-          showToast('⚠️ 解析無效，請檢查 Excel 資料格式。', 'error');
+          showToast('⚠️ 解析無效，請檢查資料格式。', 'error');
           return;
         }
-        setTransactions(prev => [...importedList, ...prev]);
-        showToast("🎉 成功從 Excel 匯入 " + importedList.length + " 筆歷史收支！", 'success');
+
+        if (isFirebaseReady && db) {
+          try {
+            const CHUNK_SIZE = 500;
+            for (let i = 0; i < importedList.length; i += CHUNK_SIZE) {
+              const chunk = importedList.slice(i, i + CHUNK_SIZE);
+              const batch = db.batch();
+              chunk.forEach(t => {
+                const docRef = db.collection('transactions').doc(t.id);
+                batch.set(docRef, t);
+              });
+              await batch.commit();
+            }
+            showToast(`🎉 成功分批同步 ${importedList.length} 筆歷史記帳至雲端！`, 'success');
+          } catch (err) {
+            console.error("Firestore batch commit failed:", err);
+            showToast('⚠️ 雲端同步失敗，改存入本地快取。', 'error');
+            setTransactions(prev => [...importedList, ...prev]);
+          }
+        } else {
+          setTransactions(prev => [...importedList, ...prev]);
+          showToast(`🎉 成功從檔案/剪貼簿匯入 ${importedList.length} 筆歷史收支至本地！`, 'success');
+        }
+        setSheet({ isOpen: false, type: '', data: null });
+      };
+
+      const handleMazuCsvUpload = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          try {
+            const text = event.target.result;
+            const rows = text.split(/\r?\n/);
+            if (rows.length < 2) {
+              showToast("⚠️ 檔案行數不足，請確認 CSV 檔案格式！", "error");
+              return;
+            }
+
+            const headers = rows[0].split(',').map(h => h.replace(/^["']|["']$/g, '').trim());
+            
+            const dateIdx = headers.findIndex(h => h.includes('日期') || h.toLowerCase().includes('date'));
+            const typeIdx = headers.findIndex(h => h.includes('類別') || h.includes('類型') || h.toLowerCase().includes('type'));
+            const categoryIdx = headers.findIndex(h => h.includes('分類') || h.includes('主類別') || h.toLowerCase().includes('category'));
+            const amountIdx = headers.findIndex(h => h.includes('金額') || h.toLowerCase().includes('amount'));
+            const descIdx = headers.findIndex(h => h.includes('備註') || h.includes('備注') || h.includes('說明') || h.toLowerCase().includes('desc') || h.toLowerCase().includes('note'));
+            const subCategoryIdx = headers.findIndex(h => h.includes('子類別') || h.toLowerCase().includes('sub'));
+
+            if (dateIdx === -1 || amountIdx === -1) {
+              showToast("⚠️ 無法識別必備欄位 (日期、金額)，請確認 CSV 檔案！", "error");
+              return;
+            }
+
+            const parsedTxs = [];
+            for (let i = 1; i < rows.length; i++) {
+              const row = rows[i];
+              if (!row.trim()) continue;
+
+              const cells = [];
+              let insideQuote = false;
+              let currentCell = '';
+              for (let j = 0; j < row.length; j++) {
+                const char = row[j];
+                if (char === '"' || char === "'") {
+                  insideQuote = !insideQuote;
+                } else if (char === ',' && !insideQuote) {
+                  cells.push(currentCell.trim());
+                  currentCell = '';
+                } else {
+                  currentCell += char;
+                }
+              }
+              cells.push(currentCell.trim());
+
+              if (cells.length <= Math.max(dateIdx, amountIdx)) continue;
+
+              let dateStr = cells[dateIdx].replace(/^["']|["']$/g, '').trim();
+              if (!dateStr) continue;
+
+              dateStr = dateStr.replace(/\//g, '-');
+              if (dateStr.length === 8 && /^\d{8}$/.test(dateStr)) {
+                dateStr = `${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)}`;
+              } else if (dateStr.includes(' ')) {
+                dateStr = dateStr.split(' ')[0];
+              }
+
+              if (isNaN(Date.parse(dateStr))) {
+                continue;
+              }
+
+              const typeText = typeIdx !== -1 ? cells[typeIdx].replace(/^["']|["']$/g, '').trim() : '';
+              let amount = parseFloat(cells[amountIdx].replace(/[$,\s"']/g, ''));
+              if (isNaN(amount)) continue;
+
+              let isIncome = false;
+              if (typeText.includes('收') || typeText.toLowerCase() === 'income' || (amount > 0 && !typeText.includes('轉'))) {
+                isIncome = true;
+              }
+              if (amount < 0) {
+                isIncome = false;
+                amount = Math.abs(amount);
+              }
+
+              const mainCat = categoryIdx !== -1 ? cells[categoryIdx].replace(/^["']|["']$/g, '').trim() : '';
+              const subCat = subCategoryIdx !== -1 ? cells[subCategoryIdx].replace(/^["']|["']$/g, '').trim() : '';
+              const rawDesc = descIdx !== -1 ? cells[descIdx].replace(/^["']|["']$/g, '').trim() : '';
+              
+              let desc = rawDesc;
+              if (subCat) desc = `${subCat} | ${desc}`;
+              if (mainCat && !desc.includes(mainCat)) desc = `${mainCat} — ${desc}`;
+              desc = desc ? `${desc} (麻布記帳 CSV 匯入)` : `麻布歷史帳包匯入`;
+
+              const combinedText = (mainCat + ' ' + subCat + ' ' + rawDesc).toLowerCase();
+              let category = '其他';
+              if (/(餐|食|咖啡|飯|飲料|全家|7-11|麥當勞|餐飲|吃)/.test(combinedText)) {
+                category = '餐飲伙食';
+              } else if (/(房|租|水費|電費|瓦斯|管理費|芬園|逸境|住|房貸)/.test(combinedText)) {
+                category = '住宅房租';
+              } else if (/(車|油|高鐵|捷運|公車|uber|計程車|保養|交通|搭乘)/.test(combinedText)) {
+                category = '交通移動';
+              } else if (/(玩|樂|旅|假|購|買|服飾|衣|鞋|娛樂|網購|電影|遊戲)/.test(combinedText)) {
+                category = '娛樂生活';
+              }
+
+              parsedTxs.push({
+                id: 'mazu_' + i + '_' + Date.now(),
+                date: dateStr,
+                type: isIncome ? 'income' : 'expense',
+                amount: amount,
+                category,
+                owner: '共同',
+                desc
+              });
+            }
+
+            if (parsedTxs.length === 0) {
+              showToast("⚠️ 未能解析出任何有效帳目紀錄！", "error");
+              return;
+            }
+
+            setParsedPreview(parsedTxs);
+            showToast(`🎉 成功解析 CSV，辨識出 ${parsedTxs.length} 筆歷史記帳明細！`, "success");
+          } catch (err) {
+            console.error("CSV Parse error:", err);
+            showToast("⚠️ 檔案解析失敗，請確認是否為標準 CSV！", "error");
+          }
+        };
+        reader.readAsText(file);
       };
 
       const handleSheetSubmit = (e, formData) => {
@@ -755,8 +1197,15 @@
 
         if (type === 'reconcile') {
           const bal = parseFloat(formData.balance);
-          setAccounts(prev => prev.map(a => a.id === data.id ? Object.assign({}, a, { name: formData.name, owner: formData.owner, balance: bal, currency: formData.currency }) : a));
-          showToast("帳戶資料與餘額已校準！", 'success');
+          const updated = Object.assign({}, data, { name: formData.name, owner: formData.owner, balance: bal, currency: formData.currency });
+          if (isFirebaseReady && db) {
+            db.collection('accounts').doc(data.id).set(updated)
+              .then(() => showToast("帳戶資料與餘額已校準！", 'success'))
+              .catch(err => console.error("Firestore reconcile failed:", err));
+          } else {
+            setAccounts(prev => prev.map(a => a.id === data.id ? updated : a));
+            showToast("帳戶資料與餘額已校準！", 'success');
+          }
         } else if (type === 'addAccount') {
           const bal = parseFloat(formData.balance) || 0;
           const newAcc = {
@@ -766,8 +1215,14 @@
             owner: formData.owner,
             currency: formData.currency || 'TWD'
           };
-          setAccounts(prev => [...prev, newAcc]);
-          showToast("🏦 實體帳戶「" + formData.name + "」已成功加入！", 'success');
+          if (isFirebaseReady && db) {
+            db.collection('accounts').doc(newAcc.id).set(newAcc)
+              .then(() => showToast("🏦 實體帳戶「" + formData.name + "」已成功加入！", 'success'))
+              .catch(err => console.error("Firestore addAccount failed:", err));
+          } else {
+            setAccounts(prev => [...prev, newAcc]);
+            showToast("🏦 實體帳戶「" + formData.name + "」已成功加入！", 'success');
+          }
         } else if (type === 'addOrder') {
           const uCost = parseFloat(formData.unitCost) || 0;
           const uPrice = parseFloat(formData.unitPrice) || 0;
@@ -795,8 +1250,14 @@
             status: '待買項目',
             batchId: selectedBatchId
           };
-          setOrders(prev => [newOrder, ...prev]);
-          showToast("🛍️ IG 訂單登錄成功！", 'success');
+          if (isFirebaseReady && db) {
+            db.collection('orders').doc(newOrder.id).set(newOrder)
+              .then(() => showToast("🛍️ IG 訂單登錄成功！", 'success'))
+              .catch(err => console.error("Firestore addOrder failed:", err));
+          } else {
+            setOrders(prev => [newOrder, ...prev]);
+            showToast("🛍️ IG 訂單登錄成功！", 'success');
+          }
         } else if (type === 'editOrder') {
           const uCost = parseFloat(formData.unitCost) || 0;
           const uPrice = parseFloat(formData.unitPrice) || 0;
@@ -807,7 +1268,7 @@
           const costRate = exchangeRates[costCurr] || 1.0;
           const priceRate = exchangeRates[priceCurr] || 1.0;
           
-          setOrders(prev => prev.map(o => o.id === data.id ? Object.assign({}, o, {
+          const updated = Object.assign({}, data, {
             date: formData.date,
             client: formData.client,
             item: formData.item,
@@ -819,8 +1280,15 @@
             cost: uCost * q,
             price: uPrice * q,
             profit: (uPrice * priceRate - uCost * costRate) * q
-          }) : o));
-          showToast("🛍️ 訂單資料已成功更新！", 'success');
+          });
+          if (isFirebaseReady && db) {
+            db.collection('orders').doc(data.id).set(updated)
+              .then(() => showToast("🛍️ 訂單資料已成功更新！", 'success'))
+              .catch(err => console.error("Firestore editOrder failed:", err));
+          } else {
+            setOrders(prev => prev.map(o => o.id === data.id ? updated : o));
+            showToast("🛍️ 訂單資料已成功更新！", 'success');
+          }
         } else if (type === 'addTransaction') {
           const amt = parseFloat(formData.amount) || 0;
           const newTx = {
@@ -833,8 +1301,14 @@
             owner: formData.owner,
             desc: formData.desc || ''
           };
-          setTransactions(prev => [newTx, ...prev]);
-          showToast("🏦 收支帳登錄成功！", 'success');
+          if (isFirebaseReady && db) {
+            db.collection('transactions').doc(newTx.id).set(newTx)
+              .then(() => showToast("🏦 收支帳登錄成功！", 'success'))
+              .catch(err => console.error("Firestore addTransaction failed:", err));
+          } else {
+            setTransactions(prev => [newTx, ...prev]);
+            showToast("🏦 收支帳登錄成功！", 'success');
+          }
         } else if (type === 'addStock') {
           const shs = parseInt(formData.shares, 10) || 0;
           const cst = parseFloat(formData.avgCost) || 0;
@@ -846,8 +1320,14 @@
             shares: shs, avgCost: cst, currentPrice: cur,
             owner: formData.owner
           };
-          setStocks(prev => [...prev, newStk]);
-          showToast("📈 " + newStk.symbol + " 已加入持股組合！", 'success');
+          if (isFirebaseReady && db) {
+            db.collection('stocks').doc(newStk.id).set(newStk)
+              .then(() => showToast("📈 " + newStk.symbol + " 已加入持股組合！", 'success'))
+              .catch(err => console.error("Firestore addStock failed:", err));
+          } else {
+            setStocks(prev => [...prev, newStk]);
+            showToast("📈 " + newStk.symbol + " 已加入持股組合！", 'success');
+          }
         } else if (type === 'addBatch') {
           const newBatchId = 'b_' + Date.now();
           const newBatch = {
@@ -855,17 +1335,35 @@
             name: formData.name,
             active: formData.active
           };
-          setBatches(prev => {
-            let updated = prev;
+          if (isFirebaseReady && db) {
+            const batch = db.batch();
             if (formData.active) {
-              updated = prev.map(b => Object.assign({}, b, { active: false }));
+              batches.forEach(b => {
+                batch.update(db.collection('batches').doc(b.id), { active: false });
+              });
             }
-            return [...updated, newBatch];
-          });
-          if (formData.active) {
-            setSelectedBatchId(newBatchId);
+            batch.set(db.collection('batches').doc(newBatchId), newBatch);
+            batch.commit()
+              .then(() => {
+                if (formData.active) {
+                  setSelectedBatchId(newBatchId);
+                }
+                showToast("🛍️ 團購檔期「" + formData.name + "」已成功建立！", 'success');
+              })
+              .catch(err => console.error("Firestore addBatch failed:", err));
+          } else {
+            setBatches(prev => {
+              let updated = prev;
+              if (formData.active) {
+                updated = prev.map(b => Object.assign({}, b, { active: false }));
+              }
+              return [...updated, newBatch];
+            });
+            if (formData.active) {
+              setSelectedBatchId(newBatchId);
+            }
+            showToast("🛍️ 團購檔期「" + formData.name + "」已成功建立！", 'success');
           }
-          showToast("🛍️ 團購檔期「" + formData.name + "」已成功建立！", 'success');
         }
 
         setSheet({ isOpen: false, type: '', data: null });
@@ -912,15 +1410,25 @@
 
               <div className="flex items-center gap-2 font-bold">
                 <button 
+                  onClick={triggerManualSync}
+                  className={`w-7 h-7 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400 flex items-center justify-center hover:text-emerald-400 hover:border-emerald-500/30 transition-all active-press ${isSyncing ? 'text-emerald-400 border-emerald-500/30' : ''}`}
+                  title="手動同步雲端資料庫"
+                >
+                  <Icon name="RefreshCw" size={14} className={isSyncing ? 'animate-spin' : ''} />
+                </button>
+                <button 
                   onClick={() => setSheet({ isOpen: true, type: 'settings', data: null })}
                   className="w-7 h-7 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400 flex items-center justify-center hover:text-purple-400 hover:border-purple-500/30 transition-all active-press"
-                  title="跨裝置資料同步與備份"
+                  title="系統設定與備份"
                 >
                   <Icon name="Settings" size={14} />
                 </button>
                 <div className="flex gap-1">
-                  <span className="px-1.5 py-0.5 rounded-full bg-pink-500/10 border border-pink-500/30 text-[9px] text-pink-400">Bu 🐟</span>
-                  <span className="px-1.5 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/30 text-[9px] text-blue-400">Chu 🦦</span>
+                  {currentUser === 'bu' ? (
+                    <span className="px-1.5 py-0.5 rounded-full bg-pink-500/20 border border-pink-500/50 text-[9px] text-pink-400 shadow-bu-glow flex items-center gap-0.5 font-black">Bu 🐟 <span className="text-[7px] bg-pink-500 text-white px-1 rounded-full scale-90">管理者</span></span>
+                  ) : (
+                    <span className="px-1.5 py-0.5 rounded-full bg-blue-500/20 border border-blue-500/50 text-[9px] text-blue-400 shadow-chu-glow flex items-center gap-0.5 font-black">Chu 🦦 <span className="text-[7px] bg-blue-500 text-white px-1 rounded-full scale-90">唯讀</span></span>
+                  )}
                 </div>
               </div>
             </header>
@@ -1051,13 +1559,15 @@
                       >
                         {batches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                       </select>
-                      <button 
-                        onClick={() => setSheet({ isOpen: true, type: 'addBatch', data: null })}
-                        className="w-7 h-7 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 flex items-center justify-center hover:text-purple-400 hover:border-purple-500/30 transition-all active-press"
-                        title="手動新增團購檔期"
-                      >
-                        <Icon name="Plus" size={13} />
-                      </button>
+                      {currentUser === 'bu' && (
+                        <button 
+                          onClick={() => setSheet({ isOpen: true, type: 'addBatch', data: null })}
+                          className="w-7 h-7 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 flex items-center justify-center hover:text-purple-400 hover:border-purple-500/30 transition-all active-press"
+                          title="手動新增團購檔期"
+                        >
+                          <Icon name="Plus" size={13} />
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -1078,14 +1588,16 @@
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <button onClick={() => setSheet({ isOpen: true, type: 'addOrder', data: null })} className="py-2.5 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 font-bold text-xs flex items-center justify-center gap-1.5 shadow-lg active-press text-white">
-                      <Icon name="Plus" size={14} />手動 IG 報價登錄
-                    </button>
-                    <button onClick={simulateGoogleFormImport} className="py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-200 font-bold text-xs flex items-center justify-center gap-1.5 active-press">
-                      <Icon name="FileText" size={14} className="text-green-400" />模擬 Google 表單匯入
-                    </button>
-                  </div>
+                  {currentUser === 'bu' && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <button onClick={() => setSheet({ isOpen: true, type: 'addOrder', data: null })} className="py-2.5 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 font-bold text-xs flex items-center justify-center gap-1.5 shadow-lg active-press text-white">
+                        <Icon name="Plus" size={14} />手動 IG 報價登錄
+                      </button>
+                      <button onClick={simulateGoogleFormImport} className="py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-200 font-bold text-xs flex items-center justify-center gap-1.5 active-press">
+                        <Icon name="FileText" size={14} className="text-green-400" />模擬 Google 表單匯入
+                      </button>
+                    </div>
+                  )}
 
                   <div className="space-y-2.5">
                     <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
@@ -1142,13 +1654,18 @@
                               </div>
                             </div>
                             <div className="flex flex-col items-end gap-2">
-                              <button onClick={() => toggleOrderStatus(order.id)} className={`px-2 py-1 rounded text-[9px] font-black flex items-center gap-1 ${order.status === '待買項目' ? 'bg-yellow-500/10 text-yellow-400' : order.status === '已買項目' ? 'bg-blue-500/10 text-blue-400' : 'bg-green-500/10 text-green-400'}`}>
+                              <button 
+                                onClick={() => currentUser === 'bu' && toggleOrderStatus(order.id)} 
+                                className={`px-2 py-1 rounded text-[9px] font-black flex items-center gap-1 ${order.status === '待買項目' ? 'bg-yellow-500/10 text-yellow-400' : order.status === '已買項目' ? 'bg-blue-500/10 text-blue-400' : 'bg-green-500/10 text-green-400'} ${currentUser !== 'bu' ? 'cursor-default opacity-80' : ''}`}
+                              >
                                 {order.status}
                               </button>
-                              <div className="flex items-center gap-2.5">
-                                <button onClick={() => setSheet({ isOpen: true, type: 'editOrder', data: order })} className="text-zinc-500 hover:text-purple-400 transition-colors" title="編輯訂單"><Icon name="Edit" size={12} /></button>
-                                <button onClick={() => handleOrderDelete(order.id)} className="text-zinc-600 hover:text-red-400 transition-colors" title="刪除訂單"><Icon name="Trash2" size={12} /></button>
-                              </div>
+                              {currentUser === 'bu' && (
+                                <div className="flex items-center gap-2.5">
+                                  <button onClick={() => setSheet({ isOpen: true, type: 'editOrder', data: order })} className="text-zinc-500 hover:text-purple-400 transition-colors" title="編輯訂單"><Icon name="Edit" size={12} /></button>
+                                  <button onClick={() => handleOrderDelete(order.id)} className="text-zinc-600 hover:text-red-400 transition-colors" title="刪除訂單"><Icon name="Trash2" size={12} /></button>
+                                </div>
+                              )}
                             </div>
                           </div>
                         );
@@ -1165,13 +1682,15 @@
                     <div className="flex justify-between items-center">
                       <h3 className="text-xs font-extrabold text-zinc-300 tracking-wider">🏦 月底實體帳戶對帳</h3>
                       <div className="flex gap-2">
-                        <button 
-                          onClick={() => setSheet({ isOpen: true, type: 'addAccount', data: null })}
-                          className="py-1 px-2 bg-zinc-900 border border-zinc-800 rounded-lg text-[9px] text-zinc-300 font-black flex items-center gap-1 active-press hover:border-zinc-700"
-                        >
-                          <Icon name="Plus" size={10} className="text-purple-400" />
-                          新增帳戶
-                        </button>
+                        {currentUser === 'bu' && (
+                          <button 
+                            onClick={() => setSheet({ isOpen: true, type: 'addAccount', data: null })}
+                            className="py-1 px-2 bg-zinc-900 border border-zinc-800 rounded-lg text-[9px] text-zinc-300 font-black flex items-center gap-1 active-press hover:border-zinc-700"
+                          >
+                            <Icon name="Plus" size={10} className="text-purple-400" />
+                            新增帳戶
+                          </button>
+                        )}
                         <span className="text-[11px] font-black text-zinc-400">合併現金: <span className="text-zinc-200">${cashTotals.total.toLocaleString()}</span></span>
                       </div>
                     </div>
@@ -1193,7 +1712,9 @@
                                 <p className="text-[9px] text-zinc-500 font-bold mt-0.5">約 NT$ {Math.round(balanceInTWD).toLocaleString()}</p>
                               )}
                             </div>
-                            <button onClick={() => setSheet({ isOpen: true, type: 'reconcile', data: acc })} className="mt-3 py-1.5 w-full bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-300 font-bold rounded-lg flex items-center justify-center gap-1 active-press"><Icon name="RefreshCw" size={10} />對帳</button>
+                            {currentUser === 'bu' && (
+                              <button onClick={() => setSheet({ isOpen: true, type: 'reconcile', data: acc })} className="mt-3 py-1.5 w-full bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-300 font-bold rounded-lg flex items-center justify-center gap-1 active-press"><Icon name="RefreshCw" size={10} />對帳</button>
+                            )}
                           </div>
                         );
                       })}
@@ -1206,17 +1727,19 @@
                         <h3 className="text-xs font-extrabold text-zinc-300 tracking-wider">📊 歷史收支流水帳簿</h3>
                         <p className="text-[9px] text-zinc-500 mt-0.5">5月收支結餘 (台幣): <span className={cashflowStats.net >= 0 ? 'text-emerald-400' : 'text-red-400'}>${Math.round(cashflowStats.net).toLocaleString()}</span></p>
                       </div>
-                      <div className="flex gap-2">
-                        <button 
-                          onClick={() => setSheet({ isOpen: true, type: 'excelImport', data: null })}
-                          className="py-1.5 px-2 bg-zinc-900 border border-zinc-800 rounded-lg text-[10px] text-zinc-300 font-black flex items-center gap-1 active-press hover:border-zinc-700"
-                          title="Excel 複製貼上快速解析匯入"
-                        >
-                          <Icon name="FileSpreadsheet" size={11} className="text-purple-400" />
-                          Excel 匯入
-                        </button>
-                        <button onClick={() => setSheet({ isOpen: true, type: 'addTransaction', data: null })} className="py-1.5 px-3 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-lg text-[10px] font-black flex items-center gap-1 active-press text-white"><Icon name="Plus" size={10} />手動記帳</button>
-                      </div>
+                      {currentUser === 'bu' && (
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={() => setSheet({ isOpen: true, type: 'excelImport', data: null })}
+                            className="py-1.5 px-2 bg-zinc-900 border border-zinc-800 rounded-lg text-[10px] text-zinc-300 font-black flex items-center gap-1 active-press hover:border-zinc-700"
+                            title="Excel/CSV 複製貼上快速解析匯入"
+                          >
+                            <Icon name="FileSpreadsheet" size={11} className="text-purple-400" />
+                            Excel / CSV 匯入
+                          </button>
+                          <button onClick={() => setSheet({ isOpen: true, type: 'addTransaction', data: null })} className="py-1.5 px-3 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-lg text-[10px] font-black flex items-center gap-1 active-press text-white"><Icon name="Plus" size={10} />手動記帳</button>
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex gap-1.5">
@@ -1253,7 +1776,9 @@
                             <div className="flex flex-col items-end gap-0.5">
                               <div className="flex items-center gap-3">
                                 <span className={`text-xs font-black ${tx.type === 'income' ? 'text-emerald-400' : 'text-zinc-200'}`}>{tx.type === 'income' ? '+' : '-'}{symbol}{tx.amount.toLocaleString()}</span>
-                                <button onClick={() => handleTransactionDelete(tx.id)} className="text-zinc-600 hover:text-red-400"><Icon name="Trash2" size={12} /></button>
+                                {currentUser === 'bu' && (
+                                  <button onClick={() => handleTransactionDelete(tx.id)} className="text-zinc-600 hover:text-red-400"><Icon name="Trash2" size={12} /></button>
+                                )}
                               </div>
                               {curr !== 'TWD' && (
                                 <span className="text-[8.5px] text-zinc-500 font-bold">
@@ -1287,9 +1812,11 @@
                       <button onClick={triggerStockPriceUpdate} disabled={isUpdatingStock} className="py-1.5 px-3 bg-zinc-900 border border-zinc-800 text-zinc-300 rounded-lg text-[10px] font-bold flex items-center gap-1.5 hover:border-zinc-700 disabled:opacity-50 active-press">
                         <Icon name="RefreshCw" size={10} className={isUpdatingStock ? 'animate-spin' : ''} />模擬更新即時股價
                       </button>
-                      <button onClick={() => setSheet({ isOpen: true, type: 'addStock', data: null })} className="py-1.5 px-3.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg text-[10px] font-black active-press flex items-center gap-1 shadow-md shadow-blue-500/15">
-                        <Icon name="Plus" size={10} />新增持股
-                      </button>
+                      {currentUser === 'bu' && (
+                        <button onClick={() => setSheet({ isOpen: true, type: 'addStock', data: null })} className="py-1.5 px-3.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg text-[10px] font-black active-press flex items-center gap-1 shadow-md shadow-blue-500/15">
+                          <Icon name="Plus" size={10} />新增持股
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -1318,7 +1845,9 @@
                             <div className="flex flex-col items-end gap-1">
                               <p className="text-xs font-black">${Math.round(val).toLocaleString()}</p>
                               <p className={`text-[9px] font-bold ${profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>{profit >= 0 ? '+' : ''}${Math.round(profit).toLocaleString()} ({profit >= 0 ? '+' : ''}{pct.toFixed(1)}%)</p>
-                              <button onClick={() => handleStockDelete(stk.id)} className="text-zinc-600 hover:text-red-400"><Icon name="Trash2" size={11} /></button>
+                              {currentUser === 'bu' && (
+                                <button onClick={() => handleStockDelete(stk.id)} className="text-zinc-600 hover:text-red-400"><Icon name="Trash2" size={11} /></button>
+                              )}
                             </div>
                           </div>
                         );
@@ -1917,6 +2446,25 @@
                 </button>
               </div>
 
+              <div className="border-t border-zinc-800/80 my-4" />
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-zinc-400 block">或者：直接上傳「麻布記帳 CSV」歷史帳包</label>
+                <div className="flex items-center gap-3">
+                  <label className="flex-1 flex flex-col items-center justify-center py-4 px-3 bg-zinc-950 border border-dashed border-zinc-800 rounded-xl hover:border-purple-500 transition-colors cursor-pointer text-center group">
+                    <Icon name="Upload" size={24} className="text-purple-400 mb-1 transition-colors group-hover:scale-110" />
+                    <span className="text-[10px] font-bold text-zinc-300">選擇麻布記帳 .csv 檔案</span>
+                    <span className="text-[8px] text-zinc-500 mt-0.5">自動對齊欄位、每 500 筆分批秒速寫入</span>
+                    <input 
+                      type="file" 
+                      accept=".csv" 
+                      onChange={handleMazuCsvUpload} 
+                      className="hidden" 
+                    />
+                  </label>
+                </div>
+              </div>
+
               <div>
                 <label className="text-[10px] font-bold text-zinc-400 block mb-1">貼上 Excel / 試算表內容 *</label>
                 <textarea 
@@ -2067,35 +2615,38 @@
                 </button>
               </form>
 
-              <div className="border-t border-zinc-800/80 my-4" />
-
-              <div className="space-y-2.5 text-left">
-                <label className="text-[10px] font-bold text-zinc-400 block">步驟三：資料庫維護與清空（正式啟用前準備）</label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button 
-                    type="button"
-                    onClick={() => {
-                      if (confirm('確定要清空「好物推推」底下的所有模擬訂單嗎？此動作將清除所有訂單紀錄以利您正式錄入。')) {
-                        onClearOrders();
-                      }
-                    }}
-                    className="py-2 bg-red-950/30 border border-red-500/30 text-red-400 font-extrabold text-[10px] rounded-xl hover:bg-red-900/30 active-press"
-                  >
-                    🗑️ 清空好物推推訂單
-                  </button>
-                  <button 
-                    type="button"
-                    onClick={() => {
-                      if (confirm('確定要清空「收支流水帳」中的所有交易明細嗎？這將會清除您所有的歷史流水記帳明細。')) {
-                        onClearTransactions();
-                      }
-                    }}
-                    className="py-2 bg-red-950/30 border border-red-500/30 text-red-400 font-extrabold text-[10px] rounded-xl hover:bg-red-900/30 active-press"
-                  >
-                    🗑️ 清空歷史流水收支
-                  </button>
-                </div>
-              </div>
+              {currentUser === 'bu' && (
+                <>
+                  <div className="border-t border-zinc-800/80 my-4" />
+                  <div className="space-y-2.5 text-left">
+                    <label className="text-[10px] font-bold text-zinc-400 block">步驟三：資料庫維護與清空（正式啟用前準備）</label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          if (confirm('確定要清空「好物推推」底下的所有模擬訂單嗎？此動作將清除所有訂單紀錄以利您正式錄入。')) {
+                            onClearOrders();
+                          }
+                        }}
+                        className="py-2 bg-red-950/30 border border-red-500/30 text-red-400 font-extrabold text-[10px] rounded-xl hover:bg-red-900/30 active-press"
+                      >
+                        🗑️ 清空好物推推訂單
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          if (confirm('確定要清空「收支流水帳」中的所有交易明細嗎？這將會清除您所有的歷史流水記帳明細。')) {
+                            onClearTransactions();
+                          }
+                        }}
+                        className="py-2 bg-red-950/30 border border-red-500/30 text-red-400 font-extrabold text-[10px] rounded-xl hover:bg-red-900/30 active-press"
+                      >
+                        🗑️ 清空歷史流水收支
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           );
 
