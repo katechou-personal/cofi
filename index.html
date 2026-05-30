@@ -1930,20 +1930,68 @@
                     onAccountDelete={handleAccountDelete}
                     onClearOrders={handleClearOrders}
                     onClearTransactions={handleClearTransactions}
-                    onSettingsImport={(payload) => {
-                      setAccounts(payload.accounts);
-                      setStocks(payload.stocks);
-                      setBatches(payload.batches);
-                      setOrders(payload.orders);
-                      setTransactions(payload.transactions);
+                    onSettingsImport={async (payload) => {
+                      if (isFirebaseReady && db) {
+                        try {
+                          showToast('⚡ 正在將本機資料遷移至雲端資料庫...', 'info');
+                          
+                          // 1. Write accounts
+                          if (Array.isArray(payload.accounts)) {
+                            const batch = db.batch();
+                            payload.accounts.forEach(a => batch.set(db.collection('accounts').doc(a.id), a));
+                            await batch.commit();
+                          }
+                          // 2. Write stocks
+                          if (Array.isArray(payload.stocks)) {
+                            const batch = db.batch();
+                            payload.stocks.forEach(s => batch.set(db.collection('stocks').doc(s.id), s));
+                            await batch.commit();
+                          }
+                          // 3. Write batches
+                          if (Array.isArray(payload.batches)) {
+                            const batch = db.batch();
+                            payload.batches.forEach(b => batch.set(db.collection('batches').doc(b.id), b));
+                            await batch.commit();
+                          }
+                          // 4. Write orders
+                          if (Array.isArray(payload.orders)) {
+                            const CHUNK_SIZE = 500;
+                            for (let i = 0; i < payload.orders.length; i += CHUNK_SIZE) {
+                              const chunk = payload.orders.slice(i, i + CHUNK_SIZE);
+                              const batch = db.batch();
+                              chunk.forEach(o => batch.set(db.collection('orders').doc(o.id), o));
+                              await batch.commit();
+                            }
+                          }
+                          // 5. Write transactions
+                          if (Array.isArray(payload.transactions)) {
+                            const CHUNK_SIZE = 500;
+                            for (let i = 0; i < payload.transactions.length; i += CHUNK_SIZE) {
+                              const chunk = payload.transactions.slice(i, i + CHUNK_SIZE);
+                              const batch = db.batch();
+                              chunk.forEach(t => batch.set(db.collection('transactions').doc(t.id), t));
+                              await batch.commit();
+                            }
+                          }
+                          showToast('🎉 本地資料成功搬家並同步至雲端！', 'success');
+                        } catch (err) {
+                          console.error("Cloud migration failed:", err);
+                          showToast('❌ 雲端搬家失敗，請檢查網路！', 'error');
+                        }
+                      } else {
+                        setAccounts(payload.accounts || []);
+                        setStocks(payload.stocks || []);
+                        setBatches(payload.batches || []);
+                        setOrders(payload.orders || []);
+                        setTransactions(payload.transactions || []);
+                        showToast('🎉 已成功載入本機備份！', 'success');
+                      }
                       
                       // 確保同步更新當前選中的檔期 ID
                       if (Array.isArray(payload.batches) && payload.batches.length > 0) {
                         const active = payload.batches.find(b => b.active);
                         setSelectedBatchId(active ? active.id : payload.batches[0].id);
                       }
-                      
-                      showToast('⚡ 跨裝置資料同步成功！已完美載入。', 'success');
                       setSheet({ isOpen: false, type: '', data: null });
                     }}
                   />
