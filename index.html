@@ -1380,6 +1380,7 @@
             client: formData.client || '手動IG買家',
             channel: 'IG手動',
             item: formData.item,
+            category: formData.category || '',
             unitCost: uCost,
             unitPrice: uPrice,
             quantity: q,
@@ -1413,6 +1414,7 @@
             date: formData.date,
             client: formData.client,
             item: formData.item,
+            category: formData.category || '',
             unitCost: uCost,
             unitPrice: uPrice,
             quantity: q,
@@ -2162,6 +2164,7 @@
         client: '',
         date: new Date().toISOString().split('T')[0],
         item: '',
+        category: '',
         unitCost: '',
         unitPrice: '',
         quantity: '1',
@@ -2176,6 +2179,7 @@
             client: data.client || '',
             date: data.date || new Date().toISOString().split('T')[0],
             item: data.item || '',
+            category: data.category || '',
             unitCost: data.unitCost !== undefined ? data.unitCost : (data.cost / (data.quantity || 1)),
             unitPrice: data.unitPrice !== undefined ? data.unitPrice : (data.price / (data.quantity || 1)),
             quantity: data.quantity !== undefined ? String(data.quantity) : '1',
@@ -2447,6 +2451,23 @@
                       ))}
                     </div>
                   )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <label className="text-[10px] font-bold text-zinc-400 block mb-1">商品類別 *</label>
+                  <select 
+                    value={orderForm.category || ''} 
+                    onChange={(e) => setOrderForm(prev => Object.assign({}, prev, { category: e.target.value }))} 
+                    className="w-full px-2.5 py-2 bg-zinc-950 border border-zinc-800 text-xs font-bold text-zinc-200 rounded-xl outline-none"
+                  >
+                    <option value="">自動智慧分類 🧠</option>
+                    <option value="堅果果乾">堅果果乾 🥜</option>
+                    <option value="衣物">衣物 👗</option>
+                    <option value="吊飾">吊飾 🔑</option>
+                    <option value="其他">其他類別 📦</option>
+                  </select>
                 </div>
               </div>
               
@@ -2850,23 +2871,57 @@
     function PackingListPanel({ orders }) {
       const [isOpen, setIsOpen] = useState(false);
 
-      const packingData = useMemo(() => {
-        const counts = {};
+      const groupedPackingData = useMemo(() => {
+        const groups = {
+          '堅果果乾': { label: '堅果果乾 🥜', items: {}, color: 'text-amber-400 border-amber-500/20 bg-amber-500/5 hover:bg-amber-500/10' },
+          '衣物': { label: '衣物 👗', items: {}, color: 'text-pink-400 border-pink-500/20 bg-pink-500/5 hover:bg-pink-500/10' },
+          '吊飾': { label: '吊飾 🔑', items: {}, color: 'text-indigo-400 border-indigo-500/20 bg-indigo-500/5 hover:bg-indigo-500/10' },
+          '其他': { label: '其他類別 📦', items: {}, color: 'text-zinc-400 border-zinc-500/20 bg-zinc-500/5 hover:bg-zinc-500/10' }
+        };
+
         orders.forEach(o => {
+          const cat = o.category || (() => {
+            const name = o.item || '';
+            if (/(腰果|果乾|開心果|堅果|棗|黑棗|蔓越莓)/.test(name)) return '堅果果乾';
+            if (/(襯衫|褲|套裝|背心|裙|衣|服|帽|S|M|L|XL)/.test(name)) return '衣物';
+            if (/(吊飾|掛件|鑰匙圈|飾品|手鍊|項鍊)/.test(name)) return '吊飾';
+            return '其他';
+          })();
+          
+          const groupName = groups[cat] ? cat : '其他';
           const name = o.item || '未命名商品';
           const q = o.quantity || 1;
-          if (!counts[name]) {
-            counts[name] = { total: 0, pending: 0, bought: 0, shipped: 0 };
+          
+          if (!groups[groupName].items[name]) {
+            groups[groupName].items[name] = { total: 0, pending: 0, bought: 0, shipped: 0 };
           }
-          counts[name].total += q;
-          if (o.status === '待買項目') counts[name].pending += q;
-          else if (o.status === '已買項目') counts[name].bought += q;
-          else if (o.status === '已出貨') counts[name].shipped += q;
+          
+          groups[groupName].items[name].total += q;
+          if (o.status === '待買項目') groups[groupName].items[name].pending += q;
+          else if (o.status === '已買項目') groups[groupName].items[name].bought += q;
+          else if (o.status === '已出貨') groups[groupName].items[name].shipped += q;
         });
-        return Object.entries(counts).map(([name, data]) => ({ name, ...data }));
+
+        return Object.entries(groups)
+          .map(([key, data]) => {
+            const itemsList = Object.entries(data.items).map(([name, counts]) => ({ name, ...counts }));
+            const totalItemsCount = itemsList.reduce((acc, it) => acc + it.total, 0);
+            return {
+              key,
+              label: data.label,
+              color: data.color,
+              items: itemsList,
+              totalItemsCount
+            };
+          })
+          .filter(g => g.items.length > 0);
       }, [orders]);
 
-      if (packingData.length === 0) return null;
+      const totalUniqueItemsCount = useMemo(() => {
+        return groupedPackingData.reduce((acc, g) => acc + g.items.length, 0);
+      }, [groupedPackingData]);
+
+      if (totalUniqueItemsCount === 0) return null;
 
       return (
         <div className="premium-card rounded-xl p-3 border-purple-500/10 space-y-2">
@@ -2875,24 +2930,37 @@
             onClick={() => setIsOpen(!isOpen)}
             className="w-full flex items-center justify-between text-xs font-black text-purple-300 active-press outline-none"
           >
-            <span className="flex items-center gap-1.5">📦 本期出貨品項累計盤點 ({packingData.length} 種)</span>
+            <span className="flex items-center gap-1.5">📦 本期出貨品項累計盤點 ({totalUniqueItemsCount} 種)</span>
             <span className="text-[10px] bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20 text-purple-400">
               {isOpen ? '收合' : '展開盤點'}
             </span>
           </button>
 
           {isOpen && (
-            <div className="pt-2 border-t border-zinc-800/80 space-y-1.5 animate-fadeIn max-h-[180px] overflow-y-auto no-scrollbar">
-              {packingData.map((item, idx) => (
-                <div key={idx} className="flex flex-col gap-0.5 py-1 px-1.5 rounded bg-zinc-950/40 border border-zinc-900/60 text-[10px]">
-                  <div className="flex justify-between items-center font-bold">
-                    <span className="text-zinc-200">{item.name}</span>
-                    <span className="text-purple-400 font-extrabold">共 {item.total} 件</span>
+            <div className="pt-2 border-t border-zinc-800/80 space-y-3 animate-fadeIn max-h-[360px] overflow-y-auto no-scrollbar">
+              {groupedPackingData.map((group) => (
+                <div key={group.key} className="space-y-1.5">
+                  {/* Category Header */}
+                  <div className={`flex items-center justify-between text-[10px] font-black px-2 py-0.5 rounded border ${group.color}`}>
+                    <span>{group.label}</span>
+                    <span className="opacity-90">共 {group.totalItemsCount} 件</span>
                   </div>
-                  <div className="flex gap-3 text-[9px] text-zinc-500 font-semibold">
-                    <span className={item.pending > 0 ? 'text-yellow-400/80 font-black' : ''}>待買: {item.pending}</span>
-                    <span className={item.bought > 0 ? 'text-blue-400/80 font-black' : ''}>已買: {item.bought}</span>
-                    <span className={item.shipped > 0 ? 'text-green-400/80 font-black' : ''}>已出貨: {item.shipped}</span>
+                  
+                  {/* Category Items */}
+                  <div className="space-y-1 pl-0.5">
+                    {group.items.map((item, idx) => (
+                      <div key={idx} className="flex flex-col gap-0.5 py-1 px-1.5 rounded bg-zinc-950/40 border border-zinc-900/60 text-[10px]">
+                        <div className="flex justify-between items-center font-bold">
+                          <span className="text-zinc-200">{item.name}</span>
+                          <span className="text-purple-400 font-extrabold">共 {item.total} 件</span>
+                        </div>
+                        <div className="flex gap-3 text-[9px] text-zinc-500 font-semibold">
+                          <span className={item.pending > 0 ? 'text-yellow-400/80 font-black' : ''}>待買: {item.pending}</span>
+                          <span className={item.bought > 0 ? 'text-blue-400/80 font-black' : ''}>已買: {item.bought}</span>
+                          <span className={item.shipped > 0 ? 'text-green-400/80 font-black' : ''}>已出貨: {item.shipped}</span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               ))}
