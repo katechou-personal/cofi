@@ -260,7 +260,7 @@
       }
     }
 
-    const { useState, useEffect, useMemo } = React;
+    const { useState, useEffect, useMemo, useRef } = React;
 
     // ==========================================
     // 自製 Lucide Icon 渲染器 (配合穩定 CDN)
@@ -537,6 +537,10 @@
       // 彈窗
       const [sheet, setSheet] = useState({ isOpen: false, type: '', data: null });
       const [modal, setModal] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
+
+      // CSV 拖曳與上傳狀態
+      const [isDragging, setIsDragging] = useState(false);
+      const fileInputRef = useRef(null);
 
       // 持久化
       useEffect(() => { localStorage.setItem('cofi_accounts', JSON.stringify(accounts)); }, [accounts]);
@@ -1204,8 +1208,178 @@
           setTransactions(prev => [...importedList, ...prev]);
           showToast(`🎉 成功從檔案/剪貼簿匯入 ${importedList.length} 筆歷史收支至本地！`, 'success');
         }
-        setSheet({ isOpen: false, type: '', data: null });
+      const handleOrderCsvUpload = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+          try {
+            const text = event.target.result;
+            const rows = text.split(/\r?\n/);
+            if (rows.length < 2) {
+              showToast("⚠️ 檔案行數不足，請確認 CSV 檔案格式！", "error");
+              return;
+            }
+
+            const parsedOrders = [];
+            
+            // Skip the header row (index 0)
+            for (let i = 1; i < rows.length; i++) {
+              const row = rows[i];
+              if (!row.trim()) continue;
+
+              const cells = [];
+              let insideQuote = false;
+              let currentCell = '';
+              for (let j = 0; j < row.length; j++) {
+                const char = row[j];
+                if (char === '"' || char === "'") {
+                  insideQuote = !insideQuote;
+                } else if (char === ',' && !insideQuote) {
+                  cells.push(currentCell.trim());
+                  currentCell = '';
+                } else {
+                  currentCell += char;
+                }
+              }
+              cells.push(currentCell.trim());
+
+              if (cells.length < 14) continue;
+
+              const cleanCell = (str) => str.replace(/^["']|["']$/g, '').trim();
+
+              const dateRaw = cleanCell(cells[0]);
+              let dateStr = dateRaw.replace(/\//g, '-');
+              if (dateStr.length === 8 && /^\d{8}$/.test(dateStr)) {
+                dateStr = `${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)}`;
+              } else if (dateStr.includes(' ')) {
+                dateStr = dateStr.split(' ')[0];
+              }
+
+              if (isNaN(Date.parse(dateStr))) {
+                continue;
+              }
+
+              const buyerVal = cleanCell(cells[1]);
+              const categoryVal = cleanCell(cells[2]) || '其他';
+              const typeVal = cleanCell(cells[3]) || 'Sale';
+              const productVal = cleanCell(cells[4]);
+              const qtyVal = parseInt(cleanCell(cells[5]).replace(/,/g, ''), 10) || 1;
+              const estCostVal = parseInt(cleanCell(cells[7]).replace(/[$,\s]/g, ''), 10) || 0;
+              
+              const actualCostRaw = parseInt(cleanCell(cells[9]).replace(/[$,\s]/g, ''), 10);
+              const actualCostVal = isNaN(actualCostRaw) ? estCostVal : actualCostRaw;
+              
+              const priceRaw = parseInt(cleanCell(cells[10]).replace(/[$,\s]/g, ''), 10) || 0;
+              const revenueReceivedVal = parseInt(cleanCell(cells[11]).replace(/[$,\s]/g, ''), 10) || 0;
+              const revenuePendingVal = parseInt(cleanCell(cells[12]).replace(/[$,\s]/g, ''), 10) || 0;
+              
+              const statusRaw = cleanCell(cells[13]);
+              let statusMapped = '待買項目';
+              if (statusRaw.includes('已買')) {
+                statusMapped = '已買項目';
+              } else if (statusRaw.includes('已出貨') || statusRaw.includes('已寄出')) {
+                statusMapped = '已出貨';
+              } else if (statusRaw.includes('已訂') || statusRaw.includes('待收貨')) {
+                statusMapped = '待買項目';
+              }
+
+              const isGiftOrPersonal = (typeVal === 'Gift' || typeVal === 'Personal');
+              const unitPriceVal = isGiftOrPersonal ? 0 : priceRaw;
+              const profitVal = (unitPriceVal - actualCostVal) * qtyVal;
+
+              parsedOrders.push({
+                id: 'o_csv_' + i + '_' + Date.now(),
+                date: dateStr,
+                client: buyerVal || 'CSV買家',
+                channel: 'CSV匯入',
+                item: productVal || '未命名商品',
+                category: categoryVal,
+                type: typeVal,
+                quantity: qtyVal,
+                costCurrency: 'TWD',
+                priceCurrency: 'TWD',
+                unitCost: actualCostVal,
+                unitPrice: unitPriceVal,
+                cost: actualCostVal * qtyVal,
+                price: unitPriceVal * qtyVal,
+                profit: profitVal,
+                status: statusMapped,
+                batchId: selectedBatchId,
+                estCost: estCostVal,
+                actualCost: actualCostVal,
+                revenueReceived: isGiftOrPersonal ? 0 : revenueReceivedVal,
+                revenuePending: isGiftOrPersonal ? 0 : revenuePendingVal
+              });
+            }
+
+            if (parsedOrders.length === 0) {
+              showToast("⚠️ 未能解析出任何有效代購訂單明細！", "error");
+              return;
+            }
+
+            openConfirmModal(
+              '📥 確認導入代購明細？', 
+              `成功解析出 ${parsedOrders.length} 筆代購訂單。點選「確認」將批量寫入雲端並即時更新大盤！`, 
+              async () => {
+                setModal({ isOpen: false, title: '', message: '', onConfirm: null });
+                showToast("⚡ 正在批次導入訂單至雲端...", "info");
+
+                try {
+                  if (isFirebaseReady && db) {
+                    const CHUNK_SIZE = 500;
+                    for (let j = 0; j < parsedOrders.length; j += CHUNK_SIZE) {
+                      const chunk = parsedOrders.slice(j, j + CHUNK_SIZE);
+                      const batch = db.batch();
+                      chunk.forEach(ord => {
+                        batch.set(db.collection('orders').doc(ord.id), ord);
+                      });
+                      await batch.commit();
+                    }
+                    showToast(`🎉 成功匯入 ${parsedOrders.length} 筆訂單至雲端資料庫！`, "success");
+                  } else {
+                    setOrders(prev => [...parsedOrders, ...prev]);
+                    showToast(`🎉 成功匯入 ${parsedOrders.length} 筆訂單至本地資料！`, "success");
+                  }
+                } catch (err) {
+                  console.error("Firestore batch order write failed:", err);
+                  showToast("❌ 雲端寫入失敗，請檢查網路連線！", "error");
+                }
+              }
+            );
+
+          } catch (err) {
+            console.error("CSV Parse error:", err);
+            showToast("⚠️ 檔案解析失敗，請確認是否為標準 CSV！", "error");
+          }
+        };
+        e.target.value = '';
+        reader.readAsText(file);
       };
+
+      const handleDragOver = (e) => {
+        e.preventDefault();
+        setIsDragging(true);
+      };
+
+      const handleDragLeave = () => {
+        setIsDragging(false);
+      };
+
+      const handleDrop = (e) => {
+        e.preventDefault();
+        setIsDragging(false);
+        const file = e.dataTransfer.files[0];
+        if (file && file.name.endsWith('.csv')) {
+          const fakeEvent = { target: { files: [file], value: '' } };
+          handleOrderCsvUpload(fakeEvent);
+        } else {
+          showToast("⚠️ 僅支援上傳 CSV 檔案格式！", "error");
+        }
+      };
+
+
 
       const handleMazuCsvUpload = (e) => {
         const file = e.target.files[0];
@@ -1713,6 +1887,29 @@
                       )}
                     </div>
                   </div>
+
+                  {currentUser === 'bu' && (
+                    <div 
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      onDrop={handleDrop}
+                      onClick={() => fileInputRef.current?.click()}
+                      className={`border-2 border-dashed rounded-2xl p-4 text-center cursor-pointer transition-all duration-200 flex flex-col items-center justify-center gap-1.5 ${isDragging ? 'border-purple-500 bg-purple-500/5 shadow-premium-glow' : 'border-zinc-800 bg-zinc-950/40 hover:border-zinc-700 hover:bg-zinc-900/30'}`}
+                    >
+                      <input 
+                        type="file" 
+                        ref={fileInputRef} 
+                        onChange={handleOrderCsvUpload} 
+                        accept=".csv" 
+                        className="hidden" 
+                      />
+                      <Icon name="UploadCloud" size={24} className={isDragging ? 'text-purple-400 animate-pulse' : 'text-zinc-500'} />
+                      <div>
+                        <p className="text-xs font-bold text-zinc-300">📥 匯入代購明細 CSV</p>
+                        <p className="text-[10px] text-zinc-500 font-medium mt-0.5">點擊選擇檔案，或拖曳 CSV 檔案至此處</p>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="premium-card rounded-2xl p-4 border-purple-500/20">
                     <div className="grid grid-cols-3 text-center gap-2">
